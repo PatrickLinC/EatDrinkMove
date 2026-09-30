@@ -161,11 +161,7 @@ struct DayContent: View {
             )
 
             if isToday {
-                HabitWindow(refreshKey: foods.count + waters.count + exercises.count)
-                    .id("habits")
                 CommandWindow(cupSize: cupSize)
-                QuestWindow(nudges: NudgeEngine.nudges(foods: foods, waterTotal: waterTotal,
-                                                       waterGoal: waterGoal, skippedMeals: skippedMeals))
             } else {
                 PixelWindow(title: "補記") {
                     Text("忘了記錄？可以補記這一天。").font(.px(12)).foregroundStyle(Color.soft)
@@ -176,15 +172,19 @@ struct DayContent: View {
                 }
             }
 
-            WaterWindow(total: waterTotal, goal: waterGoal, cupSize: cupSize,
-                        lastEntry: waters.last, canAdd: isToday)
-
             AdventureLog(day: day, foods: foods, exercises: exercises, skippedMeals: skippedMeals) {
                 editingFood = $0
             }
 
-            // 冒險和餐盤放最下面，記錄飲食的部分留在上面
+            WaterWindow(total: waterTotal, goal: waterGoal, cupSize: cupSize,
+                        lastEntry: waters.last, canAdd: isToday)
+
+            // 記錄飲食的部分在上面；任務、冒險、餐盤放下面
             if isToday {
+                HabitWindow(refreshKey: foods.count + waters.count + exercises.count)
+                    .id("habits")
+                QuestWindow(nudges: NudgeEngine.nudges(foods: foods, waterTotal: waterTotal,
+                                                       waterGoal: waterGoal, skippedMeals: skippedMeals))
                 AdventureWindow(refreshKey: foods.count + waters.count + exercises.count)
                 if let festival = Festival.active() { FestivalWindow(festival: festival).id("festival") }
                 PlateWindow(foods: foods)
