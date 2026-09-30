@@ -7,8 +7,12 @@ import UniformTypeIdentifiers
 struct FootprintView: View {
     @ObservedObject private var routes = RouteStore.shared
     @ObservedObject private var recorder = RouteRecorder.shared
+    @ObservedObject private var diary = FootprintDiary.shared
     @State private var selected: SavedRoute?
     @State private var sharing: SavedRoute?
+    @State private var today: FootprintDaySummary?
+    @State private var showCalendar = false
+    @State private var openedDay: Date?
 
     var body: some View {
         ScrollViewReader { reader in
@@ -18,15 +22,10 @@ struct FootprintView: View {
                         PixelChip(text: "開拓 \(routes.cellCount) 格", color: .move)
                     }
 
-                    PixelWindow(title: "今日足跡", tint: .brand) {
-                        FogMapView(highlight: routes.routes(on: .now), showsFog: false)
-                            .frame(height: 220)
-                            .clipShape(Rectangle())
-                            .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
-                        Text(routes.routes(on: .now).isEmpty ? "今天還沒出發，按下面的「散步」開始吧！" : "今天走過的路線都疊在這張地圖上。")
-                            .font(.px(12))
-                            .foregroundStyle(Color.soft)
+                    if let recap = diary.pendingRecap {
+                        FootprintRecapWindow(date: recap) { openedDay = $0 }
                     }
+                    todayWindow
                     startWindow.id("start")
                     AdventureStatsWindow { selected = $0 }.id("stats")
                     routesWindow
@@ -49,6 +48,8 @@ struct FootprintView: View {
             }
             .background(Color.paper)
             .task {
+                FootprintDiary.shared.backfillIfNeeded()
+                today = await FootprintDaySummary.load(.now)
                 #if DEBUG
                 // 開發用：-scrollTo start／stats／fogMap／fog 捲到某個位置截圖
                 let arguments = ProcessInfo.processInfo.arguments
@@ -59,16 +60,47 @@ struct FootprintView: View {
                 // -routeDetail 打開第一條路線，-routeShare 直接打開分享路線圖
                 if arguments.contains("-routeDetail") { selected = routes.routes.first }
                 if arguments.contains("-routeShare") { sharing = routes.routes.first }
+                // -footprintCalendar 打開足跡月曆，-footprintDay 打開昨天的足跡
+                showCalendar = arguments.contains("-footprintCalendar")
+                if arguments.contains("-footprintDay") { openedDay = Date.now.adding(days: -1) }
                 #endif
                 await routes.importFromHealth()
             }
             .sheet(item: $selected) { RouteDetailSheet(route: $0) }
+            .sheet(isPresented: $showCalendar) { FootprintCalendarSheet() }
+            .background {
+                Color.clear.sheet(item: Binding(get: { openedDay.map(OpenedDay.init) }, set: { openedDay = $0?.date })) {
+                    FootprintDaySheet(date: $0.date)
+                }
+            }
             .background { Color.clear.sheet(item: $sharing) { RouteShareSheet(route: $0) } }
             .alert("沒有定位權限", isPresented: $recorder.locationDenied) {
                 Button("好") {}
             } message: {
                 Text("請到「設定 → 隱私權與安全性 → 定位服務 → 卡路里大作戰」打開「使用 App 期間」。")
             }
+        }
+    }
+
+    /// 今天的足跡：走過的格子、路線、步數，下面可以打開足跡月曆看以前
+    private var todayWindow: some View {
+        PixelWindow(title: "今日足跡", tint: .brand) {
+            if let today, !today.visited.isEmpty || !today.routes.isEmpty {
+                DayFootprintMap(summary: today)
+                    .frame(height: 220)
+                    .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
+            } else {
+                FogMapView(highlight: routes.routes(on: .now), showsFog: false)
+                    .frame(height: 220)
+                    .clipShape(Rectangle())
+                    .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
+                Text("今天還沒有足跡。出門走走，或按下面的「散步」開始冒險吧！")
+                    .font(.px(12))
+                    .foregroundStyle(Color.soft)
+            }
+            if let today { FootprintStats(summary: today) }
+            Button("足跡月曆・看以前的足跡") { showCalendar = true }
+                .buttonStyle(.pixel(.secondary, fullWidth: true, fontSize: 12))
         }
     }
 
@@ -402,4 +434,9 @@ struct WorldFogWindow: View {
         default: return "等待定位權限…"
         }
     }
+}
+
+private struct OpenedDay: Identifiable {
+    let date: Date
+    var id: Date { date }
 }

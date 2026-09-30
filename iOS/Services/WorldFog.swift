@@ -81,9 +81,9 @@ final class WorldFogStore: NSObject, ObservableObject {
         }
         manager.delegate = self
         authorization = manager.authorizationStatus
-        // 第一次：把已經記錄的路線補進迷霧
+        // 第一次：把已經記錄的路線補進迷霧（也記進那天的足跡日記）
         if !UserDefaults.standard.bool(forKey: Self.backfilledKey) {
-            for route in RouteStore.shared.routes { clear(along: route.coordinates, save: false) }
+            for route in RouteStore.shared.routes { clear(along: route.coordinates, save: false, day: route.start) }
             UserDefaults.standard.set(true, forKey: Self.backfilledKey)
             scheduleSave()
         }
@@ -146,13 +146,13 @@ final class WorldFogStore: NSObject, ObservableObject {
         guard accuracy >= 0, accuracy <= 1500 else { return }
         // 定位越準，解除的範圍越貼近實際；基地台定位就解除周圍一大圈
         let radius = accuracy <= 50 ? 60 : min(max(accuracy, 120), 400)
-        clear(around: location.coordinate, radius: radius)
+        clear(around: location.coordinate, radius: radius, day: location.timestamp)
     }
 
     // MARK: 解除
 
-    /// 沿著路線精準解除（每 20 公尺取一點，連同上下左右一格）
-    func clear(along coordinates: [CLLocationCoordinate2D], save: Bool = true) {
+    /// 沿著路線精準解除（每 20 公尺取一點，連同上下左右一格）；有 day 就記進那天的足跡日記
+    func clear(along coordinates: [CLLocationCoordinate2D], save: Bool = true, day: Date? = nil) {
         var ids: [Int64] = []
         func mark(_ point: CLLocationCoordinate2D) {
             let (lat, lon) = FogCell.indices(FogCell.id(point))
@@ -176,12 +176,13 @@ final class WorldFogStore: NSObject, ObservableObject {
                                             longitude: previous.longitude + (point.longitude - previous.longitude) * t))
             }
         }
-        insert(ids)
+        let new = insert(ids)
+        if let day { FootprintDiary.shared.record(visited: ids, newCells: new, on: day) }
         if save { scheduleSave() }
     }
 
-    /// 解除某個點周圍一圈
-    func clear(around center: CLLocationCoordinate2D, radius: Double, save: Bool = true) {
+    /// 解除某個點周圍一圈；有 day 就記進那天的足跡日記
+    func clear(around center: CLLocationCoordinate2D, radius: Double, save: Bool = true, day: Date? = nil) {
         let latCells = Int64(radius / 44.5) + 1
         // 經度一格的寬度會隨緯度變窄：0.00044° × 111.32 公里 × cos(緯度)
         let lonCells = Int64(radius / (FogCell.lonStep * 111_320 * max(cos(center.latitude * .pi / 180), 0.1))) + 1
@@ -196,18 +197,22 @@ final class WorldFogStore: NSObject, ObservableObject {
                 if middle.distance(from: origin) <= radius { ids.append(id) }
             }
         }
-        insert(ids)
+        let new = insert(ids)
+        if let day { FootprintDiary.shared.record(visited: ids, newCells: new, on: day) }
         if save { scheduleSave() }
     }
 
-    private func insert(_ ids: [Int64]) {
-        var changed = false
+    /// 回傳新解除的格子數
+    @discardableResult
+    private func insert(_ ids: [Int64]) -> Int {
+        var new = 0
         for id in ids where cells.insert(id).inserted {
-            changed = true
+            new += 1
             blocks16.insert(FogCell.block(id, factor: 16))
             blocks256.insert(FogCell.block(id, factor: 256))
         }
-        if changed { objectWillChange.send() }
+        if new > 0 { objectWillChange.send() }
+        return new
     }
 
     // MARK: 用照片、GPX 補回過去的足跡
@@ -220,28 +225,31 @@ final class WorldFogStore: NSObject, ObservableObject {
             return
         }
         photoProgress = 0
-        let coordinates = await Task.detached(priority: .userInitiated) { () -> [CLLocationCoordinate2D] in
+        let spots = await Task.detached(priority: .userInitiated) { () -> [(coordinate: CLLocationCoordinate2D, date: Date?)] in
             let assets = PHAsset.fetchAssets(with: nil)
-            var seen = Set<Int64>()
-            var result: [CLLocationCoordinate2D] = []
+            var seen = Set<String>()
+            var result: [(CLLocationCoordinate2D, Date?)] = []
             assets.enumerateObjects { asset, _, _ in
                 guard let location = asset.location else { return }
-                // 同一格只要一張
-                if seen.insert(FogCell.id(location.coordinate)).inserted { result.append(location.coordinate) }
+                // 同一天、同一格只要一張
+                let key = "\(FogCell.id(location.coordinate))-\(asset.creationDate?.dayKey ?? "")"
+                if seen.insert(key).inserted { result.append((location.coordinate, asset.creationDate)) }
             }
             return result
         }.value
         let before = cells.count
-        for (index, coordinate) in coordinates.enumerated() {
-            clear(around: coordinate, radius: 120, save: false)
+        for (index, spot) in spots.enumerated() {
+            // 拍照那天的足跡日記也會記下這個地方
+            clear(around: spot.coordinate, radius: 120, save: false, day: spot.date)
             if index % 200 == 0 {
-                photoProgress = Double(index) / Double(max(coordinates.count, 1))
+                photoProgress = Double(index) / Double(max(spots.count, 1))
                 await Task.yield()
             }
         }
         photoProgress = nil
         scheduleSave()
-        importMessage = "從 \(coordinates.count) 個拍照地點解除了 \(cells.count - before) 格迷霧。"
+        FootprintDiary.shared.saveNow()
+        importMessage = "從 \(spots.count) 個拍照地點解除了 \(cells.count - before) 格迷霧，也補進了那幾天的足跡日記。"
     }
 
     /// 匯入 GPX 路線檔（其他 App 匯出的軌跡），沿著路線精準解除
@@ -300,10 +308,13 @@ final class WorldFogStore: NSObject, ObservableObject {
     #if DEBUG
     /// 開發用：-seedFog 在台北解除幾塊迷霧（配合 -seedRoutes）
     private func seedForScreenshots() {
-        for route in RouteStore.shared.routes { clear(along: route.coordinates, save: false) }
-        clear(around: CLLocationCoordinate2D(latitude: 25.0478, longitude: 121.5170), radius: 350, save: false)
-        clear(around: CLLocationCoordinate2D(latitude: 25.0263, longitude: 121.5436), radius: 250, save: false)
-        clear(along: (0...40).map { CLLocationCoordinate2D(latitude: 25.0478 - Double($0) * 0.0005, longitude: 121.5170 + Double($0) * 0.0012) }, save: false)
+        // 足跡日記：路線記在出發那天，其他的分給昨天和今天
+        let yesterday = Date.now.adding(days: -1)
+        for route in RouteStore.shared.routes { clear(along: route.coordinates, save: false, day: route.start) }
+        clear(around: CLLocationCoordinate2D(latitude: 25.0478, longitude: 121.5170), radius: 350, save: false, day: yesterday)
+        clear(around: CLLocationCoordinate2D(latitude: 25.0263, longitude: 121.5436), radius: 250, save: false, day: .now)
+        clear(along: (0...40).map { CLLocationCoordinate2D(latitude: 25.0478 - Double($0) * 0.0005, longitude: 121.5170 + Double($0) * 0.0012) },
+              save: false, day: yesterday)
     }
     #endif
 }
@@ -316,7 +327,8 @@ extension WorldFogStore: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
         guard visit.horizontalAccuracy >= 0, visit.horizontalAccuracy <= 500 else { return }
         let coordinate = visit.coordinate
-        Task { @MainActor in self.clear(around: coordinate, radius: 150) }
+        let day = visit.arrivalDate == .distantPast ? Date.now : visit.arrivalDate
+        Task { @MainActor in self.clear(around: coordinate, radius: 150, day: day) }
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

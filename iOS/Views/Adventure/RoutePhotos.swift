@@ -27,20 +27,25 @@ enum RoutePhotoLibrary {
 
     /// 路線期間（前後各 5 分鐘）拍的照片，照時間排
     static func photos(for route: SavedRoute, limit: Int = 40) async -> [RoutePhoto] {
+        await photos(from: route.start.addingTimeInterval(-300), to: route.end.addingTimeInterval(300), limit: limit)
+    }
+
+    /// 某段時間拍的照片（足跡日記用：一整天、只要有拍攝地點的）
+    static func photos(from start: Date, to end: Date, limit: Int = 40, locatedOnly: Bool = false) async -> [RoutePhoto] {
         guard canRead else { return [] }
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "creationDate >= %@ AND creationDate <= %@ AND mediaType == %d",
-                                        route.start.addingTimeInterval(-300) as NSDate,
-                                        route.end.addingTimeInterval(300) as NSDate,
-                                        PHAssetMediaType.image.rawValue)
+                                        start as NSDate, end as NSDate, PHAssetMediaType.image.rawValue)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
         options.fetchLimit = limit
         var assets: [PHAsset] = []
-        PHAsset.fetchAssets(with: options).enumerateObjects { asset, _, _ in assets.append(asset) }
+        PHAsset.fetchAssets(with: options).enumerateObjects { asset, _, _ in
+            if !locatedOnly || asset.location != nil { assets.append(asset) }
+        }
         var photos: [RoutePhoto] = []
         for asset in assets {
             guard let image = await image(for: asset, side: 240) else { continue }
-            photos.append(RoutePhoto(id: asset.localIdentifier, date: asset.creationDate ?? route.start,
+            photos.append(RoutePhoto(id: asset.localIdentifier, date: asset.creationDate ?? start,
                                      coordinate: asset.location?.coordinate, thumbnail: image))
         }
         return photos

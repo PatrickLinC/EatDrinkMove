@@ -177,7 +177,7 @@ final class RouteStore: ObservableObject {
     @discardableResult
     func add(_ route: SavedRoute) -> (newCells: Int, coins: Int) {
         saved.routes.append(route)
-        WorldFogStore.shared.clear(along: route.coordinates)
+        WorldFogStore.shared.clear(along: route.coordinates, day: route.start)
         let newCells = markCells(route)
         let coins = convertCellsToCoins(newCells)
         save()
@@ -232,7 +232,7 @@ final class RouteStore: ObservableObject {
                                    distance: Self.length(of: locations), points: Self.thin(locations), source: .health,
                                    climb: Self.climb(of: locations), moving: workout.duration)
             saved.routes.append(route)
-            WorldFogStore.shared.clear(along: route.coordinates)
+            WorldFogStore.shared.clear(along: route.coordinates, day: route.start)
             _ = convertCellsToCoins(markCells(route))
             added = true
         }
