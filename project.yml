@@ -1,0 +1,127 @@
+# 用 XcodeGen 產生 Xcode 專案：在這個資料夾執行 `xcodegen`
+# 安裝方式：brew install xcodegen
+
+name: EatDrinkMove
+
+options:
+  bundleIdPrefix: com.linjunwei
+  developmentLanguage: zh-Hant
+  createIntermediateGroups: true
+  # iPhone 用 iOS 27：內建 Apple AI 看照片需要 iOS 27
+  deploymentTarget:
+    iOS: "27.0"
+    watchOS: "10.0"
+
+settings:
+  base:
+    # ↓↓↓ 改成你自己的（必須是全世界唯一的字串，例如 com.你的英文名字.eatdrinkmove）
+    APP_BUNDLE_ID: com.linjunwei.eatdrinkmove
+    # ↓↓↓ 可以留空，產生專案後在 Xcode 的 Signing & Capabilities 選你的 Apple ID 即可
+    DEVELOPMENT_TEAM: N36KV4DSPT
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  EatDrinkMove:
+    type: application
+    platform: iOS
+    sources:
+      - path: iOS
+      - path: Shared
+    dependencies:
+      - target: EatDrinkMoveWatch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        PRODUCT_NAME: EatDrinkMove
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: Config/iOS-Info.plist
+      properties:
+        CFBundleDisplayName: 卡路里大作戰
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSHealthShareUsageDescription: 讀取 Apple Watch 記錄的步數、距離、睡眠、心率變異度、運動路線與體重，用在今日摘要、精靈收集、精神力與開拓地圖。
+        NSHealthUpdateUsageDescription: 把你記錄的飲食、喝水、體重、散步跑步路線和呼吸練習存進「健康」App。
+        NSCameraUsageDescription: 拍攝餐點照片讓 AI 估算熱量，或掃描商品條碼。
+        NSMicrophoneUsageDescription: 用說的補充餐點內容（例如「飯只吃半碗」），讓 AI 判讀得更準。
+        NSSpeechRecognitionUsageDescription: 把你說的餐點說明轉成文字，交給 AI 參考。
+        NSLocationWhenInUseUsageDescription: 按下「出發冒險」後記錄散步、跑步的路線，並解除世界迷霧。
+        NSLocationAlwaysAndWhenInUseUsageDescription: 打開「世界迷霧」自動解除後，用省電的大範圍定位在背景解除你去過的地方。位置只存在這支 iPhone。
+        NSPhotoLibraryUsageDescription: 「用照片解除迷霧」時讀取照片的拍攝地點，把去過的地方的迷霧解開。照片不會離開這支 iPhone。
+        NSPhotoLibraryAddUsageDescription: 把「路線圖」存到你的相簿。
+        # 記錄路線時螢幕關掉也能繼續定位（只有按下出發後才會用）
+        UIBackgroundModes:
+          - location
+        # 像素字體（在 Shared/Fonts）
+        UIAppFonts:
+          - Cubic_11.ttf
+    entitlements:
+      path: Config/EatDrinkMove.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+
+  EatDrinkMoveWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: Watch
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).watchkitapp
+        PRODUCT_NAME: EatDrinkMoveWatch
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: Config/Watch-Info.plist
+      properties:
+        CFBundleDisplayName: 卡路里大作戰
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        UIAppFonts:
+          - Cubic_11.ttf
+        WKCompanionAppBundleIdentifier: $(APP_BUNDLE_ID)
+        NSHealthShareUsageDescription: 在手錶上記錄散步、跑步時，讀取心率、距離與活動熱量。
+        NSHealthUpdateUsageDescription: 把在手錶上記錄的散步、跑步與路線存進「健康」App。
+        NSLocationWhenInUseUsageDescription: 在手錶上記錄散步、跑步的路線，iPhone 的開拓地圖會用到。
+        # 記錄體能訓練時螢幕暗了也繼續
+        WKBackgroundModes:
+          - workout-processing
+    entitlements:
+      path: Config/Watch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+
+schemes:
+  EatDrinkMove:
+    build:
+      targets:
+        EatDrinkMove: all
+        EatDrinkMoveWatch: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  EatDrinkMoveWatch:
+    build:
+      targets:
+        EatDrinkMoveWatch: all
+    run:
+      config: Debug

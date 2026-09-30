@@ -1,0 +1,23 @@
+# Xcode
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+build/
+.DS_Store
+
+# 金鑰
+iOS/Secrets.swift
+
+# 交接說明（只給本機開發用）
+HANDOFF.md
+
+# 營養資料：抓取暫存與各品牌資料只放本機（品牌資料有著作權，不上傳）
+Tools/nutrition/cache/
+Tools/nutrition/data/
+iOS/Resources/brand_foods.json
+__pycache__/
+Tools/nutrition/.venv/
+
+# 抓取工具的執行紀錄與編譯產物
+Tools/nutrition/*.log
+Tools/nutrition/ocr_table
