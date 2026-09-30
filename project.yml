@@ -30,14 +30,19 @@ targets:
     sources:
       - path: iOS
       - path: Shared
+      # 動態島／鎖定畫面的冒險資料型別（App 和小工具共用）
+      - path: Widgets/RouteActivityAttributes.swift
     dependencies:
       - target: EatDrinkMoveWatch
+      - target: EatDrinkMoveWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         PRODUCT_NAME: EatDrinkMove
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # 精靈的替代圖示（AppIcon-onigiri 等）也一起打包
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     info:
       path: Config/iOS-Info.plist
@@ -67,11 +72,15 @@ targets:
         # 像素字體（在 Shared/Fonts）
         UIAppFonts:
           - Cubic_11.ttf
+        # 出發冒險時在鎖定畫面、動態島顯示時間與距離
+        NSSupportsLiveActivities: true
     entitlements:
       path: Config/EatDrinkMove.entitlements
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        # 久坐提醒：「健康」有新步數時在背景叫醒 App
+        com.apple.developer.healthkit.background-delivery: true
 
   EatDrinkMoveWatch:
     type: application
@@ -109,12 +118,39 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
 
+  EatDrinkMoveWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared/PixelKit.swift
+      - path: Shared/SharedUI.swift
+      - path: Shared/CompanionSkin.swift
+      - path: Shared/Fonts/Cubic_11.ttf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).widgets
+        PRODUCT_NAME: EatDrinkMoveWidgets
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+    info:
+      path: Config/Widgets-Info.plist
+      properties:
+        CFBundleDisplayName: 卡路里大作戰
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIAppFonts:
+          - Cubic_11.ttf
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
 schemes:
   EatDrinkMove:
     build:
       targets:
         EatDrinkMove: all
         EatDrinkMoveWatch: all
+        EatDrinkMoveWidgets: all
     run:
       config: Debug
     archive:

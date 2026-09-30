@@ -18,7 +18,7 @@ struct WorldMapView: View {
                     encounterWindow
                     PixelWindow(title: "元氣大陸") {
                         MapCanvas(kilometers: journey.kilometers, fog: StressStore.shared.fogActive)
-                            .frame(height: 1080)
+                            .frame(height: 1620)
                     }
                     .id("map")
                     storyWindow.id("story")
@@ -67,7 +67,7 @@ struct WorldMapView: View {
                 }
                 .font(.px(12))
             } else {
-                Text("抵達王城了！第一章完成，繼續走還會遇到旅途見聞。")
+                Text("抵達開拓區了！第二章完成，繼續走還會遇到旅途見聞。")
                     .font(.px(12))
                     .foregroundStyle(Color.move)
             }
@@ -114,33 +114,39 @@ struct WorldMapView: View {
 
     private var storyWindow: some View {
         PixelWindow(title: "主線故事", tint: .fat) {
-            Text(Story.chapterOneTitle)
-            ForEach(Story.chapterOne) { scene in
-                let unlocked = journey.hasSeen(scene) || (scene.region == .riceVillage || journey.isReached(scene.region))
-                HStack(spacing: 10) {
-                    PixelSprite(art: scene.region.landmark, size: 20, tint: unlocked ? nil : .track)
-                    Text(unlocked ? scene.title : "？？？")
-                        .foregroundStyle(unlocked ? Color.ink : Color.soft)
-                    Spacer(minLength: 4)
-                    if unlocked {
-                        Button(journey.hasSeen(scene) ? "重看" : "播放") { journey.playing = scene }
-                            .buttonStyle(.pixel(.secondary, fontSize: 12))
-                    } else {
-                        Text("抵達\(scene.region.title)").font(.px(12)).foregroundStyle(Color.soft)
-                    }
+            chapter(Story.chapterOneTitle, Story.chapterOne)
+            PixelDivider()
+            chapter(Story.chapterTwoTitle, Story.chapterTwo)
+        }
+    }
+
+    @ViewBuilder private func chapter(_ title: String, _ scenes: [StoryScene]) -> some View {
+        Text(title)
+        ForEach(scenes) { scene in
+            let unlocked = journey.hasSeen(scene) || (scene.region == .riceVillage || journey.isReached(scene.region))
+            HStack(spacing: 10) {
+                PixelSprite(art: scene.region.landmark, size: 20, tint: unlocked ? nil : .track)
+                Text(unlocked ? scene.title : "？？？")
+                    .foregroundStyle(unlocked ? Color.ink : Color.soft)
+                Spacer(minLength: 4)
+                if unlocked {
+                    Button(journey.hasSeen(scene) ? "重看" : "播放") { journey.playing = scene }
+                        .buttonStyle(.pixel(.secondary, fontSize: 12))
+                } else {
+                    Text("抵達\(scene.region.title)").font(.px(12)).foregroundStyle(Color.soft)
                 }
             }
         }
     }
 }
 
-/// 地圖本體：蜿蜒的小路、六個地標、目前位置的小夥伴
+/// 地圖本體：蜿蜒的小路、九個地標（第一章六個、第二章三個）、目前位置的小夥伴
 struct MapCanvas: View {
     let kilometers: Double
     /// 今天有焦慮霧時，霧會飄在小夥伴旁邊
     var fog = false
 
-    private static let columns: [CGFloat] = [0.28, 0.72, 0.3, 0.7, 0.3, 0.55]
+    private static let columns: [CGFloat] = [0.28, 0.72, 0.3, 0.7, 0.3, 0.55, 0.28, 0.7, 0.4]
 
     var body: some View {
         GeometryReader { geometry in

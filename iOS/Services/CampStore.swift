@@ -370,7 +370,7 @@ final class CampStore: ObservableObject {
 
 enum HeroTitle: String, CaseIterable, Identifiable {
     case novice, walker, dawn, dreamGuard, moonMage, royalKnight, collector, master, shinyHunter,
-         campOwner, rich, bondFriend, steady, explorer, lakeGuard, calmSage, pioneer, festivalFan
+         campOwner, rich, bondFriend, steady, explorer, lakeGuard, calmSage, pioneer, festivalFan, voyager
 
     var id: String { rawValue }
 
@@ -394,6 +394,7 @@ enum HeroTitle: String, CaseIterable, Identifiable {
         case .calmSage: "靜心賢者"
         case .pioneer: "開拓先鋒"
         case .festivalFan: "節慶達人"
+        case .voyager: "大陸旅人"
         }
     }
 
@@ -417,6 +418,7 @@ enum HeroTitle: String, CaseIterable, Identifiable {
         case .calmSage: "喚醒靜心塔的三隻精靈"
         case .pioneer: "喚醒開拓區的三隻精靈"
         case .festivalFan: "喚醒 3 隻節慶精靈"
+        case .voyager: "旅程抵達開拓區（185 公里）"
         }
     }
 
@@ -444,6 +446,7 @@ enum HeroTitle: String, CaseIterable, Identifiable {
         case .calmSage: return region(.calmTower)
         case .pioneer: return region(.frontier)
         case .festivalFan: return SpiritRegion.festival.spirits.filter { spirits.unlockedDate($0) != nil }.count >= 3
+        case .voyager: return journey.isReached(.frontier)
         }
     }
 

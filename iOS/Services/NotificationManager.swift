@@ -25,7 +25,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// 由排程管理的通知前綴；「稍後提醒」用 snooze- 開頭，不會被重新排程清掉
-    private let managedPrefixes = ["meal-", "water-", "review-", "comeback-"]
+    private let managedPrefixes = ["meal-", "water-", "review-", "comeback-", "stand-"]
     private let center = UNUserNotificationCenter.current()
     private var refreshTask: Task<Void, Never>?
 
@@ -67,6 +67,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// 馬上重新排程（「健康」在背景送來新步數時用，要等排完才告訴系統處理好了）
+    @MainActor
+    func refreshNow() async {
+        refreshTask?.cancel()
+        await rescheduleAll()
+    }
+
     // MARK: - 排程
 
     @MainActor
@@ -81,6 +88,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let status = LogService.shared.todayStatus()
         let now = Date.now
         var requests: [UNNotificationRequest] = []
+        // 久坐提醒：最近一小時已經起來走過，下一次就跳過
+        let movedRecently = AppSettings.sedentaryReminders ? await SedentaryMonitor.movedRecently() : false
 
         // iOS 最多保留 64 個待送通知，所以只排未來 4 天，App 每次開啟都會重新排
         for offset in 0..<4 {
@@ -111,6 +120,18 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                         }
                     }
                     requests.append(waterRequest(at: fire, status: isToday ? status : nil))
+                }
+            }
+
+            // 久坐提醒只排今天和明天（通知數量有上限）
+            if AppSettings.sedentaryReminders, offset < 2, SedentaryMonitor.isWorkday(day) {
+                var minute = AppSettings.workStart + 60
+                while minute <= AppSettings.workEnd {
+                    let fire = Date.at(minutes: minute, on: day)
+                    minute += 60
+                    guard fire > now else { continue }
+                    if isToday, movedRecently, fire.timeIntervalSince(now) < 3600 { continue }
+                    requests.append(standRequest(at: fire))
                 }
             }
 
@@ -170,6 +191,15 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
             }
         }
         return request(id: "review-\(date.dayKey)", title: "營火時間 🔥",
+                       body: body, category: Category.review, at: date)
+    }
+
+    private func standRequest(at date: Date) -> UNNotificationRequest {
+        let name = UserDefaults.standard.string(forKey: SettingKey.companionName) ?? "小卡"
+        let lines = ["起來走 5 分鐘，順便裝杯水吧！", "伸個懶腰、動動肩膀，再回來繼續。", "去窗邊走走，眼睛也休息一下。",
+                     "站起來走到最遠的那台飲水機吧！"]
+        let body = "\(name)：\(lines[Calendar.current.component(.hour, from: date) % lines.count])"
+        return request(id: "stand-\(date.dayKey)-\(date.minutesSinceMidnight)", title: "坐一小時了 🪑",
                        body: body, category: Category.review, at: date)
     }
 

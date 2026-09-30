@@ -1812,3 +1812,67 @@ extension PixelArt {
         ".....kkkkkk.....",
     ])
 }
+
+// MARK: - 第二章的地標
+
+extension PixelArt {
+    /// 地圖：聖泉湖
+    static let landmarkLake = PixelArt([
+        "................",
+        ".......aa.......",
+        "......a..a......",
+        ".....a.aa.a.....",
+        ".......aa.......",
+        "......kssk......",
+        "......kssk......",
+        ".g..kkkkkkkk..g.",
+        "kgkkaaaaaaaakkgk",
+        "kkaaahaaaaaahaak",
+        "kaaaaaaaaaaaaaak",
+        "kaahaaaaaahaaaak",
+        ".kaaaaaaaaaaaak.",
+        "..kkaaaaaaaakk..",
+        "....kkkkkkkk....",
+        "................",
+    ])
+
+    /// 地圖：靜心塔
+    static let landmarkTower = PixelArt([
+        ".......kk.......",
+        "......kffk......",
+        ".....kffffk.....",
+        "....kffffffk....",
+        "...kkkkkkkkkk...",
+        "....kssyyssk....",
+        "....ksskkssk....",
+        "....kssssssk....",
+        "....ksskkssk....",
+        "....ksskkssk....",
+        "....kssssssk....",
+        "...kssssssssk...",
+        "...ksskkkkssk...",
+        "...ksskbbkssk...",
+        "..kkkkkkkkkkkk..",
+        "................",
+    ])
+
+    /// 地圖：開拓區（插旗的山丘，旁邊是還沒散的霧）
+    static let landmarkFrontier = PixelArt([
+        "....k...........",
+        "....kppp........",
+        "....kpppp.......",
+        "....kppp........",
+        "....k...........",
+        "....k.....tt....",
+        "....k...tttttt..",
+        "...kkk..........",
+        "..kgggk....tt...",
+        ".kgggggk.tttttt.",
+        "kgggggggk.......",
+        "kggggggggkk.....",
+        "kgggbgggggggk...",
+        "kggbbbgggggggk..",
+        "kgbbbbbgggggggk.",
+        "kkkkkkkkkkkkkkkk",
+    ])
+}

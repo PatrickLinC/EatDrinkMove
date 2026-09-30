@@ -266,6 +266,21 @@ struct FoodAnalyzer {
 
     private static let insightTask = RemoteTask(systemPrompt: insightPrompt, geminiSchema: nil, claudeSchema: nil)
 
+    /// 冒險週報：步數、睡眠、精神力、路線（提示詞在 AdventureReport）
+    func adventureReport(summary: String) async throws -> (String, AIProvider) {
+        let prompt = await AdventureReport.prompt
+        return try await run(
+            preferred: nil,
+            onDevice: { () async throws -> String in
+                try await OnDeviceFoodAnalyzer.chat(instructions: prompt, prompt: summary)
+            },
+            remote: { (provider: AIProvider) async throws -> String in
+                let task = RemoteTask(systemPrompt: prompt, geminiSchema: nil, claudeSchema: nil)
+                return try await self.remoteText(provider, task: task, text: summary)
+            }
+        )
+    }
+
     // MARK: - AI 小夥伴
 
     /// 小夥伴聊天：system 是角色設定加上今天的狀況，prompt 是整理成文字的對話紀錄

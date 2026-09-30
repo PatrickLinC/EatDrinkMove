@@ -323,7 +323,12 @@ final class RouteStore: ObservableObject {
                        distance: meters, points: loop(25.035 + Double(day) * 0.0004, 121.56, 0.004, 40), source: .health,
                        climb: meters / 150, moving: meters * 0.5)
         }
-        saved.routes = [walk, run] + older
+        // 同一條散步路線再走兩次（檢查常走路線的比較）
+        let repeats = [(7, 1810.0), (14, 1905.0)].map { day, moving in
+            SavedRoute(id: UUID(), kind: .walk, start: walk.start.adding(days: -day), end: walk.start.adding(days: -day).addingTimeInterval(moving + 60),
+                       distance: 3380, points: walk.points, source: .app, climb: 11, moving: moving)
+        }
+        saved.routes = [walk, run] + older + repeats
         _ = markCells(walk)
         _ = markCells(run)
     }
@@ -414,6 +419,7 @@ final class RouteRecorder: ObservableObject {
         startDate = .now
         phase = .recording
         showRecorder = true
+        RouteActivityController.start(kind: kind, startDate: .now)
         session = CLBackgroundActivitySession()
         updates = Task { [weak self] in
             do {
@@ -438,12 +444,14 @@ final class RouteRecorder: ObservableObject {
             distance += meters
         }
         locations.append(location)
+        RouteActivityController.update(distance: distance, elapsed: elapsed, paused: false)
     }
 
     func pause() {
         guard phase == .recording else { return }
         pausedAt = .now
         phase = .paused
+        RouteActivityController.update(distance: distance, elapsed: elapsed, paused: true, force: true)
     }
 
     func resume() {
@@ -453,6 +461,7 @@ final class RouteRecorder: ObservableObject {
         // 暫停時走的路不接起來：從下一個點重新開始算
         if let last = locations.last { locations.append(last) }
         phase = .recording
+        RouteActivityController.update(distance: distance, elapsed: elapsed, paused: false, force: true)
     }
 
     /// 結束並存檔
@@ -470,11 +479,13 @@ final class RouteRecorder: ObservableObject {
         let saved = RouteStore.shared.add(route)
         result = (route, saved.newCells, saved.coins)
         phase = .finished
+        RouteActivityController.finish(distance: distance, elapsed: elapsed)
         await HealthKitManager.shared.saveRouteWorkout(kind: kind, start: startDate, end: end, locations: locations)
     }
 
     /// 不存，直接放棄
     func discard() {
+        RouteActivityController.cancel()
         updates?.cancel()
         updates = nil
         session?.invalidate()
@@ -506,6 +517,8 @@ final class RouteRecorder: ObservableObject {
         kind = .walk
         phase = .recording
         showRecorder = true
+        RouteActivityController.start(kind: .walk, startDate: startDate!)
+        RouteActivityController.update(distance: distance, elapsed: elapsed, paused: false, force: true)
         if arguments.contains("-seedRecordingDone") {
             let route = SavedRoute(id: UUID(), kind: .walk, start: startDate!, end: .now, distance: distance,
                                    points: RouteStore.thin(points), source: .app, climb: 8, moving: 880)

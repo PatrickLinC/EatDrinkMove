@@ -97,6 +97,8 @@ struct HeroView: View {
                             PreferencesView()
                         }
                         PixelDivider()
+                        menu("App 圖示", detail: AppIconChoice.current.title, art: .companion) { AppIconView() }
+                        PixelDivider()
                         menu("AI 小夥伴", detail: "\(companionName)・\((CompanionStyle(rawValue: companionStyle) ?? .motivating).title)",
                              art: .companion) { CompanionSettingsView() }
                         PixelDivider()
@@ -810,12 +812,17 @@ struct RemindersView: View {
     @AppStorage(SettingKey.sleepTime) private var sleepTime = AppSettings.Defaults.sleepTime
     @AppStorage(SettingKey.eveningReview) private var eveningReview = true
     @AppStorage(SettingKey.eveningTime) private var eveningTime = AppSettings.Defaults.eveningTime
+    @AppStorage(SettingKey.sedentaryReminders) private var sedentaryReminders = false
+    @AppStorage(SettingKey.workStart) private var workStart = AppSettings.Defaults.workStart
+    @AppStorage(SettingKey.workEnd) private var workEnd = AppSettings.Defaults.workEnd
+    @AppStorage(SettingKey.sedentaryWeekdaysOnly) private var weekdaysOnly = true
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     /// 任一項改變就重新排程
     private var signature: String {
-        [mealReminders, waterReminders, eveningReview].map { $0 ? "1" : "0" }.joined()
+        [mealReminders, waterReminders, eveningReview, sedentaryReminders, weekdaysOnly].map { $0 ? "1" : "0" }.joined()
             + "\(breakfastTime)-\(lunchTime)-\(dinnerTime)-\(waterInterval)-\(wakeTime)-\(sleepTime)-\(eveningTime)"
+            + "-\(workStart)-\(workEnd)"
     }
 
     var body: some View {
@@ -873,13 +880,27 @@ struct RemindersView: View {
                 } footer: {
                     pxHeader("睡前升起營火：收下今天的元氣幣、設定明天的小目標，也提醒還漏了哪一餐、還差多少水。")
                 }
+
+                Section {
+                    Toggle("久坐提醒", isOn: $sedentaryReminders)
+                    if sedentaryReminders {
+                        DatePicker("上班時間", selection: $workStart.timeOfDay, displayedComponents: .hourAndMinute)
+                        DatePicker("下班時間", selection: $workEnd.timeOfDay, displayedComponents: .hourAndMinute)
+                        Toggle("只有平日提醒", isOn: $weekdaysOnly)
+                    }
+                } footer: {
+                    pxHeader("上班時間每個整點提醒起來動 5 分鐘。最近一小時已經走了 250 步以上，下一次就不吵你。")
+                }
             }
             .pixelRows()
         }
         .pixelForm()
         .navigationTitle("提醒")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: signature) { NotificationManager.shared.scheduleRefresh() }
+        .onChange(of: signature) {
+            NotificationManager.shared.scheduleRefresh()
+            SedentaryMonitor.startObservingIfNeeded()
+        }
         .task { notificationStatus = await NotificationManager.shared.authorizationStatus() }
     }
 }

@@ -32,8 +32,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // 必須在啟動時就設定，App 在背景被通知按鈕或手錶喚醒時才接得到
         NotificationManager.shared.setup()
         PhoneConnectivity.shared.activate()
-        // 世界迷霧：在背景被位置變動叫醒時也要接著監聽
-        MainActor.assumeIsolated { WorldFogStore.shared.resumeIfEnabled() }
+        MainActor.assumeIsolated {
+            // 世界迷霧：在背景被位置變動叫醒時也要接著監聽
+            WorldFogStore.shared.resumeIfEnabled()
+            // 久坐提醒：「健康」在背景送來新步數時重新排提醒
+            SedentaryMonitor.startObservingIfNeeded()
+        }
         return true
     }
 }
@@ -174,6 +178,9 @@ struct RootView: View {
         .sheet(isPresented: $debugBackup) {
             NavigationStack { BackupView() }
         }
+        .sheet(isPresented: $debugIcons) {
+            NavigationStack { AppIconView() }
+        }
         .sheet(isPresented: $debugStress) { StressDetailView() }
         .sheet(isPresented: $debugBoss) { BossView() }
         .sheet(isPresented: $debugChronicle) {
@@ -203,6 +210,7 @@ struct RootView: View {
     @State private var debugCompanionSettings = false
     @State private var debugTitles = false
     @State private var debugBackup = false
+    @State private var debugIcons = false
     @State private var debugStress = false
     @State private var debugBoss = false
     @State private var debugChronicle = false
@@ -222,6 +230,7 @@ struct RootView: View {
         debugCompanionSettings = arguments.contains("-companionSettings")
         debugTitles = arguments.contains("-titles")
         debugBackup = arguments.contains("-backupView")
+        debugIcons = arguments.contains("-appIcons")
         debugStress = arguments.contains("-stressDetail")
         debugBoss = arguments.contains("-boss")
         recorder.seedForScreenshots()

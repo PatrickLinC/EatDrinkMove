@@ -4,8 +4,9 @@ import SwiftUI
 // MARK: - 旅程路線
 
 extension SpiritRegion {
-    /// 大陸地圖上的旅程站點（聖泉湖、靜心塔、開拓區、節慶廣場靠生活習慣開放，不在旅程路線上）
-    static let journeyStops: [SpiritRegion] = [.riceVillage, .trailValley, .dawnHill, .dreamForest, .moonMarsh, .royalCity]
+    /// 大陸地圖上的旅程站點：第一章到王城，第二章繼續往聖泉湖、靜心塔、開拓區（節慶廣場不在路線上）
+    static let journeyStops: [SpiritRegion] = [.riceVillage, .trailValley, .dawnHill, .dreamForest, .moonMarsh, .royalCity,
+                                               .sacredLake, .calmTower, .frontier]
 
     /// 從米糧村出發，累計走幾公里會抵達
     var journeyKm: Double {
@@ -16,7 +17,10 @@ extension SpiritRegion {
         case .dreamForest: 36
         case .moonMarsh: 56
         case .royalCity: 80
-        case .sacredLake, .calmTower, .frontier, .festival: 0
+        case .sacredLake: 110
+        case .calmTower: 145
+        case .frontier: 185
+        case .festival: 0
         }
     }
 
@@ -29,7 +33,10 @@ extension SpiritRegion {
         case .dreamForest: .landmarkTree
         case .moonMarsh: .landmarkMarsh
         case .royalCity: .landmarkCastle
-        case .sacredLake, .calmTower, .frontier, .festival: art
+        case .sacredLake: .landmarkLake
+        case .calmTower: .landmarkTower
+        case .frontier: .landmarkFrontier
+        case .festival: art
         }
     }
 
@@ -54,7 +61,16 @@ extension SpiritRegion {
         case .royalCity: ["石碑寫著：「累積，是最強的魔法。」",
                           "城門的衛兵說：休息日也是冒險的一部分。",
                           "王城的鐘聲說：記得為自己走過的路驕傲。"]
-        case .sacredLake, .calmTower, .frontier, .festival: []
+        case .sacredLake: ["湖邊的石碑寫著：「口渴的時候，其實已經有點缺水了。」",
+                           "青蛙王子說：每次起身，就順手裝一杯水。",
+                           "湖面映著天空：喝夠水的人，眼睛也比較亮。"]
+        case .calmTower: ["石碑寫著：「慢慢吸氣，慢慢吐氣，心就會回來。」",
+                          "塔裡的僧侶說：把明天要做的事寫下來，今晚就不用一直想。",
+                          "塔頂的鐘聲說：休息不是偷懶，是為了走更遠。"]
+        case .frontier: ["插在山頂的旗子寫著：「沒走過的路，才是真正的冒險。」",
+                         "斥候狐狸說：換一條路回家，會看見不一樣的風景。",
+                         "風把霧吹開了一點：你走過的地方，霧就不會再回來。"]
+        case .festival: []
         }
     }
 }
@@ -171,12 +187,45 @@ enum Story {
             StoryLine(speaker: .partner, text: "雖然我一路上抱怨很多，但這趟冒險，其實還滿開心的。"),
             StoryLine(speaker: .narrator, text: "可是城堡最高的塔上，有一雙發亮的眼睛正盯著你們——"),
             StoryLine(speaker: .bat, text: "嘻嘻，走到這裡算你厲害。不過真正的夜晚，現在才要開始……"),
-            StoryLine(speaker: .narrator, text: "第一章「沉睡的大陸」完。第二章，敬請期待。"),
+            StoryLine(speaker: .narrator, text: "第一章「沉睡的大陸」完。第二章「迷霧的源頭」開始，下一站：聖泉湖（110 公里）。"),
         ]),
     ]
 
+    static let chapterTwoTitle = "第二章　迷霧的源頭"
+
+    /// 第二章：王城之後，往聖泉湖、靜心塔、開拓區
+    static let chapterTwo: [StoryScene] = [
+        StoryScene(id: "c2-sacredLake", title: "抵達聖泉湖", region: .sacredLake, lines: [
+            StoryLine(speaker: .narrator, text: "離開王城往東走，眼前出現一座灰濛濛的湖。"),
+            StoryLine(speaker: .partner, text: "這就是聖泉湖？傳說湖水清到看得見湖底的星星……現在怎麼這麼混？"),
+            StoryLine(speaker: .narrator, text: "湖邊的青蛙王子嘆了口氣：大家都忘了喝水，湖就一天比一天乾。"),
+            StoryLine(speaker: .partner, text: "那我們每天把水喝夠，湖應該會慢慢清起來吧！"),
+            StoryLine(speaker: .narrator, text: "湖面浮起一個泡泡，裡面映著遠方一座被霧包住的高塔。下一站：靜心塔（145 公里）。"),
+        ]),
+        StoryScene(id: "c2-calmTower", title: "抵達靜心塔", region: .calmTower, lines: [
+            StoryLine(speaker: .narrator, text: "高塔被濃霧包得密不透風，塔頂的鐘好久沒有響了。"),
+            StoryLine(speaker: .fog, text: "走了這麼遠……還有好多事沒做完吧……要不要停下來煩惱一下……"),
+            StoryLine(speaker: .partner, text: "焦慮霧！原來你一直躲在這裡長大！"),
+            StoryLine(speaker: .partner, text: "冒險者，跟我一起：吸氣四秒……吐氣六秒……"),
+            StoryLine(speaker: .narrator, text: "塔頂的鐘「噹」地響了一聲，霧被推到了塔外的荒野。"),
+            StoryLine(speaker: .fog, text: "哼……荒野那麼大，你們找不到我的……"),
+            StoryLine(speaker: .narrator, text: "下一站：開拓區（185 公里）。"),
+        ]),
+        StoryScene(id: "c2-frontier", title: "抵達開拓區", region: .frontier, lines: [
+            StoryLine(speaker: .narrator, text: "地圖到這裡就斷了，前方是一片沒人走過的迷霧荒野。"),
+            StoryLine(speaker: .partner, text: "原來大陸上的霧，都是從沒人去過的地方冒出來的。"),
+            StoryLine(speaker: .partner, text: "那就簡單啦——我們去過的地方，霧就會散開！"),
+            StoryLine(speaker: .narrator, text: "「足跡」的世界迷霧，就是這片荒野的地圖。每走一條新的路，就多一塊晴朗的土地。"),
+            StoryLine(speaker: .bat, text: "嘻嘻，就算霧散了，晚上還是我的天下喔……"),
+            StoryLine(speaker: .partner, text: "那我們就早點睡，讓你連出場的機會都沒有！"),
+            StoryLine(speaker: .narrator, text: "第二章「迷霧的源頭」完。旅程還會繼續，你走過的每一步，都在畫這片大陸的地圖。"),
+        ]),
+    ]
+
+    static var allScenes: [StoryScene] { chapterOne + chapterTwo }
+
     static func scene(arrivingAt region: SpiritRegion) -> StoryScene? {
-        region == .riceVillage ? nil : chapterOne.first { $0.region == region }
+        region == .riceVillage ? nil : allScenes.first { $0.region == region }
     }
 }
 
@@ -235,7 +284,7 @@ final class JourneyStore: ObservableObject {
            let value = Double(arguments[index + 1]) {
             meters = value
             if let index = arguments.firstIndex(of: "-story"), index + 1 < arguments.count {
-                playing = Story.chapterOne.first { $0.id == arguments[index + 1] }
+                playing = Story.allScenes.first { $0.id == arguments[index + 1] }
             }
             return
         }

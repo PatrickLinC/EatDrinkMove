@@ -1,6 +1,7 @@
 import HealthKit
 import MapKit
 import Photos
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -112,12 +113,17 @@ struct RouteDetailSheet: View {
     @State private var extras = RouteExtras()
     @State private var sharing = false
     @State private var gpx: URL?
+    @State private var photos: [RoutePhoto] = []
+    @State private var photoAccess = RoutePhotoLibrary.canRead
+    @State private var viewing: RoutePhoto?
+    /// 從照片按「用這張做路線圖」
+    @State private var cardPhoto: String?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    FogMapView(highlight: [route], showsFog: false)
+                    FogMapView(highlight: [route], showsFog: false, photos: photos)
                         .frame(height: 320)
                         .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
                     VStack(alignment: .leading, spacing: 6) {
@@ -146,6 +152,8 @@ struct RouteDetailSheet: View {
                             .font(.px(12))
                             .foregroundStyle(Color.soft)
                     }
+                    repeatWindow
+                    photoWindow
                     HStack(spacing: 10) {
                         Button("分享路線圖") { sharing = true }
                             .buttonStyle(.pixel(.primary, fullWidth: true))
@@ -160,6 +168,7 @@ struct RouteDetailSheet: View {
                 }
                 .padding(16)
             }
+            .defaultScrollAnchor(Self.startsAtBottom ? .bottom : .top)
             .background(Color.paper)
             .navigationTitle("路線")
             .navigationBarTitleDisplayMode(.inline)
@@ -169,27 +178,110 @@ struct RouteDetailSheet: View {
                 }
             }
             .sheet(isPresented: $sharing) { RouteShareSheet(route: route) }
+            .sheet(item: $viewing) { photo in
+                RoutePhotoViewer(photo: photo) {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(500))
+                        cardPhoto = photo.id
+                    }
+                }
+            }
+            .sheet(item: Binding(get: { cardPhoto.map(PhotoChoice.init) }, set: { cardPhoto = $0?.id })) { choice in
+                RouteShareSheet(route: route, style: .photo, photoID: choice.id)
+            }
         }
         .font(.px(16))
         .foregroundStyle(Color.ink)
         .task {
             gpx = route.gpxFile()
             extras = await RouteExtras.load(route)
+            photos = await RoutePhotoLibrary.photos(for: route)
         }
     }
+
+    /// 開發用：-routeDetailBottom 打開時直接捲到最下面（截圖檢查常走路線、照片）
+    private static var startsAtBottom: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-routeDetailBottom")
+        #else
+        false
+        #endif
+    }
+
+    /// 常走路線：第幾次、跟上次比、這條路線的最佳
+    @ViewBuilder private var repeatWindow: some View {
+        let runs = RouteMatcher.runs(of: route, in: RouteStore.shared.routes)
+        if runs.count >= 2, let index = runs.firstIndex(where: { $0.id == route.id }) {
+            PixelWindow(title: "常走路線", tint: .calorie) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(RouteMatcher.name(route))
+                    Spacer(minLength: 4)
+                    PixelChip(text: "第 \(index + 1) 次", color: .calorie)
+                }
+                if index > 0, let comparison = RouteMatcher.comparison(route, previous: runs[index - 1]) {
+                    Text(comparison.text).foregroundStyle(comparison.faster ? Color.move : Color.soft)
+                }
+                if let best = runs.min(by: { $0.activeTime < $1.activeTime }) {
+                    Text(best.id == route.id ? "這次是這條路線的最佳紀錄！" : "路線最佳：\(RouteStore.clock(best.activeTime))（\(best.start.formatted(.dateTime.month().day()))）")
+                        .font(.px(12))
+                        .foregroundStyle(best.id == route.id ? Color.carbs : Color.soft)
+                }
+                RepeatRunChart(runs: Array(runs.suffix(10)), current: route.id)
+            }
+        }
+    }
+
+    /// 這趟拍的照片
+    private var photoWindow: some View {
+        PixelWindow(title: "這趟的照片", tint: .water) {
+            if !photoAccess {
+                Text("允許讀取照片，走路時拍的照片就會出現在路線上。")
+                    .font(.px(12))
+                    .foregroundStyle(Color.soft)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(RoutePhotoLibrary.notAsked ? "讀取這趟拍的照片" : "到設定允許讀取照片") {
+                    Task {
+                        if RoutePhotoLibrary.notAsked {
+                            photoAccess = await RoutePhotoLibrary.requestAccess()
+                            if photoAccess { photos = await RoutePhotoLibrary.photos(for: route) }
+                        } else if let url = URL(string: UIApplication.openSettingsURLString) {
+                            await UIApplication.shared.open(url)
+                        }
+                    }
+                }
+                .buttonStyle(.pixel(.secondary, fullWidth: true, fontSize: 12))
+            } else if photos.isEmpty {
+                Text("這趟沒有拍照。下次走路時拍幾張，會自動貼在路線上。")
+                    .font(.px(12))
+                    .foregroundStyle(Color.soft)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                RoutePhotoStrip(photos: photos) { viewing = $0 }
+                Text("\(photos.count) 張・有拍攝地點的會出現在地圖上，點一張可以做成路線圖。")
+                    .font(.px(12))
+                    .foregroundStyle(Color.soft)
+            }
+        }
+    }
+}
+
+/// sheet(item:) 要 Identifiable
+private struct PhotoChoice: Identifiable {
+    let id: String
 }
 
 // MARK: - 路線圖樣式
 
 /// 都是 9:16（直接可以放限時動態）；透明的可以疊在自己拍的照片上
 enum RouteCardStyle: String, CaseIterable, Identifiable {
-    case mapCard, fullMap, night, routeStats, routeOnly, statsOnly
+    case mapCard, photo, fullMap, night, routeStats, routeOnly, statsOnly
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .mapCard: "地圖卡"
+        case .photo: "照片卡"
         case .fullMap: "滿版地圖"
         case .night: "夜間卡"
         case .routeStats: "路線＋數據"
@@ -209,14 +301,22 @@ final class RouteCardModel: ObservableObject {
     let route: SavedRoute
     @Published private(set) var extras = RouteExtras()
     @Published private(set) var thumbnails: [RouteCardStyle: UIImage] = [:]
+    /// 這趟拍的照片（照片卡選背景用）
+    @Published private(set) var routePhotos: [RoutePhoto] = []
+    /// 照片卡的背景
+    @Published private(set) var photo: UIImage?
     private var squareMap: UIImage?
     private var tallMap: UIImage?
 
     init(route: SavedRoute) { self.route = route }
 
-    func load() async {
+    func load(photoID: String?) async {
         guard thumbnails.isEmpty else { return }
         extras = await RouteExtras.load(route)
+        routePhotos = await RoutePhotoLibrary.photos(for: route)
+        if let id = photoID ?? routePhotos.first?.id {
+            photo = await RoutePhotoLibrary.fullImage(id: id)
+        }
         squareMap = await Self.snapshot(route, size: CGSize(width: 324, height: 324), shiftUp: false)
         tallMap = await Self.snapshot(route, size: RouteCardStyle.size, shiftUp: true)
         for style in RouteCardStyle.allCases {
@@ -233,11 +333,22 @@ final class RouteCardModel: ObservableObject {
     }
 
     func render(_ style: RouteCardStyle, scale: CGFloat) -> UIImage? {
-        let card = RouteCard(style: style, route: route, extras: extras, squareMap: squareMap, tallMap: tallMap)
+        let card = RouteCard(style: style, route: route, extras: extras, squareMap: squareMap, tallMap: tallMap, photo: photo)
         let renderer = ImageRenderer(content: card.environment(\.colorScheme, .light))
         renderer.scale = scale
         renderer.isOpaque = !style.isTransparent
         return renderer.uiImage
+    }
+
+    /// 換照片卡的背景
+    func usePhoto(_ image: UIImage) {
+        photo = image
+        thumbnails[.photo] = render(.photo, scale: 1.5)
+    }
+
+    func usePhoto(id: String) async {
+        guard let image = await RoutePhotoLibrary.fullImage(id: id) else { return }
+        usePhoto(image)
     }
 
     /// 存檔用的大圖：1080 × 1920 的 PNG
@@ -306,17 +417,24 @@ struct RouteShareSheet: View {
     @State private var busy = false
     @State private var done = 0
 
-    init(route: SavedRoute, style: RouteCardStyle = .mapCard) {
+    private let photoID: String?
+    @State private var pickerItem: PhotosPickerItem?
+
+    init(route: SavedRoute, style: RouteCardStyle = .mapCard, photoID: String? = nil) {
         _model = StateObject(wrappedValue: RouteCardModel(route: route))
         _selected = State(initialValue: style)
+        self.photoID = photoID
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
-                    ForEach(RouteCardStyle.allCases) { style in
-                        thumbnail(style)
+                VStack(alignment: .leading, spacing: 12) {
+                    photoPicker
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
+                        ForEach(RouteCardStyle.allCases) { style in
+                            thumbnail(style)
+                        }
                     }
                 }
                 .padding(16)
@@ -334,10 +452,57 @@ struct RouteShareSheet: View {
         .font(.px(16))
         .foregroundStyle(Color.ink)
         .sensoryFeedback(.success, trigger: done)
-        .task { await model.load() }
+        .task { await model.load(photoID: photoID) }
+        .onChange(of: pickerItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                    model.usePhoto(image.resized(maxDimension: 1920))
+                    selected = .photo
+                }
+                pickerItem = nil
+            }
+        }
         .onChange(of: selected) { _, _ in
             shareFile = nil
             message = nil
+        }
+    }
+
+    /// 照片卡的背景：這趟拍的照片，或從相簿另外選一張
+    private var photoPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("照片卡的背景").font(.px(12)).foregroundStyle(Color.soft)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    PhotosPicker(selection: $pickerItem, matching: .images) {
+                        VStack(spacing: 4) {
+                            PixelSprite(art: .photo, size: 24)
+                            Text("從相簿選").font(.px(12))
+                        }
+                        .frame(width: 64, height: 64)
+                        .pixelPanel(fill: .window, shadow: nil, lineWidth: 2)
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(model.routePhotos) { photo in
+                        Button {
+                            Task {
+                                await model.usePhoto(id: photo.id)
+                                selected = .photo
+                            }
+                        } label: {
+                            Image(uiImage: photo.thumbnail)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipped()
+                                .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(2)
+            }
         }
     }
 
@@ -351,6 +516,8 @@ struct RouteShareSheet: View {
                     if style.isTransparent { CheckerBackground() }
                     if let image = model.thumbnails[style] {
                         Image(uiImage: image).resizable().scaledToFit()
+                    } else if style == .photo, !model.thumbnails.isEmpty {
+                        Text("上面選一張照片").font(.px(12)).foregroundStyle(Color.soft)
                     } else {
                         Text("畫圖中…").font(.px(12)).foregroundStyle(Color.soft)
                     }
@@ -471,6 +638,7 @@ struct RouteCard: View {
     let extras: RouteExtras
     let squareMap: UIImage?
     let tallMap: UIImage?
+    var photo: UIImage?
 
     private var metrics: [RouteMetric] { RouteMetric.all(route, extras) }
 
@@ -478,6 +646,7 @@ struct RouteCard: View {
         Group {
             switch style {
             case .mapCard: mapCard
+            case .photo: photoCard
             case .fullMap: fullMap
             case .night: night
             case .routeStats: routeStats
@@ -505,6 +674,32 @@ struct RouteCard: View {
         .background { PixelPanel(fill: .window, shadow: nil, lineWidth: 3) }
         .padding(8)
         .background(Color.paper)
+    }
+
+    // 照片卡：自己拍的照片當背景，左下角疊路線和數據（字加墨色外框）
+    private var photoCard: some View {
+        ZStack(alignment: .bottomLeading) {
+            if let photo {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: RouteCardStyle.size.width, height: RouteCardStyle.size.height)
+                    .clipped()
+            } else {
+                Color.track
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                RouteLine(coordinates: route.coordinates, color: .calorie, outline: .ink, lineWidth: 5)
+                    .frame(width: 150, height: 150)
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(Array(metrics.prefix(3))) { metric in
+                        outlinedMetric(metric, valueSize: 22)
+                    }
+                }
+                outlinedBrand
+            }
+            .padding(22)
+        }
     }
 
     // 滿版地圖：整張都是地圖，下面一個像素視窗放數據
@@ -728,5 +923,32 @@ struct RouteShape: Shape {
             path.addLines(mapped)
         }
         return path
+    }
+}
+
+/// 同一條路線每次花的時間（越短越高分，用格子長條）
+struct RepeatRunChart: View {
+    let runs: [SavedRoute]
+    let current: UUID
+
+    var body: some View {
+        let longest = max(runs.map(\.activeTime).max() ?? 1, 1)
+        let shortest = runs.map(\.activeTime).min() ?? 0
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .bottom, spacing: 4) {
+                ForEach(runs) { run in
+                    // 快的比較高：最慢的一格高 12、最快的 56，以 4 點為一格
+                    let ratio = longest == shortest ? 1 : (longest - run.activeTime) / (longest - shortest)
+                    let height = ((12 + ratio * 44) / 4).rounded() * 4
+                    Rectangle()
+                        .fill(run.id == current ? Color.calorie : Color.brand.opacity(0.55))
+                        .frame(height: height)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(height: 58, alignment: .bottom)
+            .overlay(alignment: .bottom) { Rectangle().fill(Color.ink).frame(height: 2) }
+            Text("最近 \(runs.count) 次・越高越快").font(.px(12)).foregroundStyle(Color.soft)
+        }
     }
 }

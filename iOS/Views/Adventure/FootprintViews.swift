@@ -156,6 +156,8 @@ struct FogMapView: View {
     var highlight: [SavedRoute] = []
     /// 關掉時只看路線（今日足跡、路線詳細）
     var showsFog = true
+    /// 路線上拍的照片（有拍攝地點的才會出現在地圖上）
+    var photos: [RoutePhoto] = []
     @State private var position: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var region: MKCoordinateRegion?
 
@@ -165,6 +167,16 @@ struct FogMapView: View {
                 ForEach(highlight) { route in
                     MapPolyline(coordinates: route.coordinates)
                         .stroke(Color.brand, style: StrokeStyle(lineWidth: 5, lineCap: .square, lineJoin: .miter))
+                }
+                ForEach(photos.filter { $0.coordinate != nil }) { photo in
+                    Annotation("", coordinate: photo.coordinate!) {
+                        Image(uiImage: photo.thumbnail)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 34, height: 34)
+                            .clipped()
+                            .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
+                    }
                 }
                 UserAnnotation()
             }
@@ -298,6 +310,13 @@ struct RecordingView: View {
                 }
                 if result.newCells > 0 {
                     Text("新開拓了 \(result.newCells) 格！").foregroundStyle(Color.move)
+                }
+                // 常走路線：跟上次比
+                let runs = RouteMatcher.runs(of: result.route, in: RouteStore.shared.routes)
+                if runs.count >= 2, let index = runs.firstIndex(where: { $0.id == result.route.id }), index > 0,
+                   let comparison = RouteMatcher.comparison(result.route, previous: runs[index - 1]) {
+                    Text("這條路線第 \(index + 1) 次，\(comparison.text)！")
+                        .foregroundStyle(comparison.faster ? Color.move : Color.soft)
                 }
                 if result.coins > 0 {
                     HStack(spacing: 6) {

@@ -40,6 +40,8 @@
 	<string>「用照片解除迷霧」時讀取照片的拍攝地點，把去過的地方的迷霧解開。照片不會離開這支 iPhone。</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>把你說的餐點說明轉成文字，交給 AI 參考。</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Cubic_11.ttf</string>

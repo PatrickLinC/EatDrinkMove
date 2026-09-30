@@ -9,7 +9,7 @@ struct RecordsView: View {
     @AppStorage(SettingKey.stepGoal) private var stepGoal = AppSettings.Defaults.stepGoal
     @AppStorage(SettingKey.burnGoal) private var burnGoal = AppSettings.Defaults.burnGoal
     @State private var refresh = UUID()
-    @State private var showInsight = false
+    @State private var insightMode: InsightView.Mode?
 
     var body: some View {
         NavigationStack {
@@ -36,13 +36,20 @@ struct RecordsView: View {
                         HStack(spacing: 12) {
                             PixelSprite(art: .star, size: 36)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("分析最近 7 天的戰況")
-                                Text("給你 3 個明天就做得到的建議").font(.px(12)).foregroundStyle(Color.soft)
+                                Text("分析最近的戰況")
+                                Text("飲食給 3 個明天就做得到的建議；冒險週報找出睡眠、步數、精神力之間的關聯")
+                                    .font(.px(12))
+                                    .foregroundStyle(Color.soft)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 0)
                         }
-                        Button("請軍師分析") { showInsight = true }
-                            .buttonStyle(.pixel(.primary, fullWidth: true))
+                        HStack(spacing: 8) {
+                            Button("飲食分析") { insightMode = .food }
+                                .buttonStyle(.pixel(.primary, fullWidth: true, fontSize: 12))
+                            Button("冒險週報") { insightMode = .adventure }
+                                .buttonStyle(.pixel(.primary, fullWidth: true, fontSize: 12))
+                        }
                     }
 
                     WeeklyReportWindow(refresh: refresh)
@@ -56,7 +63,7 @@ struct RecordsView: View {
             .onChange(of: router.selectedTab) { _, tab in
                 if tab == .records { refresh = UUID() }
             }
-            .sheet(isPresented: $showInsight) { InsightView() }
+            .sheet(item: $insightMode) { InsightView(mode: $0) }
         }
     }
 
@@ -440,6 +447,14 @@ struct DayLabels: View {
 // MARK: - AI 軍師
 
 struct InsightView: View {
+    enum Mode: String, Identifiable {
+        case food, adventure
+        var id: String { rawValue }
+        var title: String { self == .food ? "AI 軍師" : "冒險週報" }
+        var loading: String { self == .food ? "正在分析最近 7 天的紀錄…" : "正在整理最近兩週的睡眠、步數和冒險…" }
+    }
+
+    var mode: Mode = .food
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var health: HealthKitManager
     @State private var text: String?
@@ -455,7 +470,7 @@ struct InsightView: View {
                         PixelWindow(title: "軍師思考中") {
                             HStack(spacing: 12) {
                                 PixelLoadingDots()
-                                Text("正在分析最近 7 天的紀錄…").foregroundStyle(Color.soft)
+                                Text(mode.loading).foregroundStyle(Color.soft)
                             }
                         }
                     }
@@ -465,7 +480,7 @@ struct InsightView: View {
                         }
                     }
                     if let text {
-                        PixelWindow(title: "軍師的建議") {
+                        PixelWindow(title: mode == .food ? "軍師的建議" : "本週冒險週報") {
                             Text(Self.render(text))
                                 .lineSpacing(6)
                                 .textSelection(.enabled)
@@ -480,7 +495,7 @@ struct InsightView: View {
                 .padding(16)
             }
             .background(Color.paper)
-            .navigationTitle("AI 軍師")
+            .navigationTitle(mode.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -514,7 +529,9 @@ struct InsightView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            let (result, usedProvider) = try await FoodAnalyzer().insight(summary: await buildSummary())
+            let (result, usedProvider) = mode == .food
+                ? try await FoodAnalyzer().insight(summary: await buildSummary())
+                : try await FoodAnalyzer().adventureReport(summary: await AdventureReport.summary())
             text = result
             provider = usedProvider
         } catch {

@@ -48,6 +48,40 @@ struct AdventureStatsWindow: View {
             weeklyChart
             PixelDivider()
             records
+            frequentRoutes
+        }
+    }
+
+    // MARK: 常走路線
+
+    @ViewBuilder private var frequentRoutes: some View {
+        let groups = Array(RouteMatcher.frequent(in: routes.routes).prefix(3))
+        if !groups.isEmpty {
+            PixelDivider()
+            Text("常走路線").font(.px(12)).foregroundStyle(Color.soft)
+            VStack(spacing: 0) {
+                ForEach(Array(groups.enumerated()), id: \.offset) { index, runs in
+                    if index > 0 { PixelDivider() }
+                    if let latest = runs.last, let best = runs.min(by: { $0.activeTime < $1.activeTime }) {
+                        Button { onSelect(latest) } label: {
+                            HStack(spacing: 10) {
+                                PixelSprite(art: latest.kind.art, size: 18)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(RouteMatcher.name(latest))
+                                    Text("走了 \(runs.count) 次・最佳 \(RouteStore.clock(best.activeTime))")
+                                        .font(.px(12))
+                                        .foregroundStyle(Color.soft)
+                                }
+                                Spacer(minLength: 4)
+                                PixelSprite(art: .cursor, size: 12)
+                            }
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
     }
 

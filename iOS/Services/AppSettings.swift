@@ -49,6 +49,10 @@ enum SettingKey {
     static let sleepTime = "sleepTime"
     static let eveningReview = "eveningReview"
     static let eveningTime = "eveningTime"
+    static let sedentaryReminders = "sedentaryReminders"
+    static let workStart = "workStart"
+    static let workEnd = "workEnd"
+    static let sedentaryWeekdaysOnly = "sedentaryWeekdaysOnly"
 
     // AI
     static let aiProvider = "aiProvider"
@@ -107,6 +111,8 @@ enum AppSettings {
         static let wakeTime = 7 * 60 + 30
         static let sleepTime = 23 * 60
         static let eveningTime = 21 * 60 + 30
+        static let workStart = 9 * 60
+        static let workEnd = 18 * 60
         static let aiProvider = AIProvider.apple.rawValue
         static let geminiModel = "gemini-3.8-flash"
         static let claudeModel = "claude-opus-5"
@@ -160,6 +166,10 @@ enum AppSettings {
             SettingKey.companionStyle: CompanionStyle.motivating.rawValue,
             SettingKey.companionOnRight: true,
             SettingKey.companionY: 0.72,
+            SettingKey.sedentaryReminders: false,
+            SettingKey.workStart: Defaults.workStart,
+            SettingKey.workEnd: Defaults.workEnd,
+            SettingKey.sedentaryWeekdaysOnly: true,
         ])
     }
 
@@ -175,6 +185,10 @@ enum AppSettings {
     static var targetWeightKG: Double { d.double(forKey: SettingKey.targetWeightKG) }
     static var cupSize: Double { max(50, d.double(forKey: SettingKey.cupSize)) }
     static var addBackExercise: Bool { d.bool(forKey: SettingKey.addBackExercise) }
+    static var sedentaryReminders: Bool { d.bool(forKey: SettingKey.sedentaryReminders) }
+    static var workStart: Int { d.integer(forKey: SettingKey.workStart) }
+    static var workEnd: Int { d.integer(forKey: SettingKey.workEnd) }
+    static var sedentaryWeekdaysOnly: Bool { d.bool(forKey: SettingKey.sedentaryWeekdaysOnly) }
 
     /// 依「每週的第一天」設定的日曆（週一或週日開始）
     static var calendar: Calendar {
