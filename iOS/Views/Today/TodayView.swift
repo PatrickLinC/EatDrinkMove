@@ -161,12 +161,8 @@ struct DayContent: View {
             )
 
             if isToday {
-                AdventureWindow(refreshKey: foods.count + waters.count + exercises.count)
-                if let festival = Festival.active() { FestivalWindow(festival: festival).id("festival") }
                 HabitWindow(refreshKey: foods.count + waters.count + exercises.count)
                     .id("habits")
-                PlateWindow(foods: foods)
-                    .id("plate")
                 CommandWindow(cupSize: cupSize)
                 QuestWindow(nudges: NudgeEngine.nudges(foods: foods, waterTotal: waterTotal,
                                                        waterGoal: waterGoal, skippedMeals: skippedMeals))
@@ -185,6 +181,14 @@ struct DayContent: View {
 
             AdventureLog(day: day, foods: foods, exercises: exercises, skippedMeals: skippedMeals) {
                 editingFood = $0
+            }
+
+            // 冒險和餐盤放最下面，記錄飲食的部分留在上面
+            if isToday {
+                AdventureWindow(refreshKey: foods.count + waters.count + exercises.count)
+                if let festival = Festival.active() { FestivalWindow(festival: festival).id("festival") }
+                PlateWindow(foods: foods)
+                    .id("plate")
             }
         }
         .sheet(item: $editingFood) { EditFoodView(entry: $0) }
