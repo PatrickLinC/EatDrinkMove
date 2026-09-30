@@ -129,7 +129,15 @@ struct WeeklyReportWindow: View {
     @AppStorage(SettingKey.burnGoal) private var burnGoal = AppSettings.Defaults.burnGoal
     @AppStorage(SettingKey.weightKG) private var weightKG = AppSettings.Defaults.weightKG
     @AppStorage(SettingKey.targetWeightKG) private var targetWeightKG = AppSettings.Defaults.targetWeightKG
-    @State private var metric: WeeklyMetric = .calories
+    @State private var metric: WeeklyMetric = {
+        #if DEBUG
+        // 開發用：-weeklyMetric weight 直接顯示某一種
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "-weeklyMetric"), index + 1 < arguments.count,
+           let metric = WeeklyMetric(rawValue: arguments[index + 1]) { return metric }
+        #endif
+        return .calories
+    }()
     @State private var weekStart = AppSettings.startOfWeek(.now)
     @State private var values: [Double?] = Array(repeating: nil, count: 7)
     @State private var selectedIndex: Int?
@@ -193,6 +201,8 @@ struct WeeklyReportWindow: View {
             }
 
             if metric == .weight {
+                PixelDivider()
+                WeightTrendView(refresh: refresh)
                 Button("記錄體重") { router.showWeight = true }
                     .buttonStyle(.pixel(.secondary, fullWidth: true))
             }
@@ -342,6 +352,80 @@ struct PixelBarChart: View {
         default: step = 10
         }
         return step * magnitude * 4
+    }
+}
+
+/// 體重趨勢：最近 4 週的 7 天平均，和上週比多少（只看趨勢，不看單日）
+struct WeightTrendView: View {
+    var refresh: UUID
+    @State private var averages: [Double?] = []
+    @State private var thisWeek: Double?
+    @State private var lastWeek: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("4 週趨勢（7 天平均）").font(.px(12)).foregroundStyle(Color.soft)
+            let known = averages.compactMap { $0 }
+            if known.count >= 2, let low = known.min(), let high = known.max() {
+                GeometryReader { geometry in
+                    let size = geometry.size
+                    let step = size.width / CGFloat(max(averages.count - 1, 1))
+                    let range = max(high - low, 0.4)
+                    let y: (Double) -> CGFloat = { size.height * (1 - CGFloat((($0 - low) / range) * 0.8 + 0.1)) }
+                    Path { path in
+                        var started = false
+                        for (index, value) in averages.enumerated() {
+                            guard let value else { continue }
+                            let point = CGPoint(x: CGFloat(index) * step, y: y(value))
+                            if started {
+                                // 像素感：先水平再垂直
+                                path.addLine(to: CGPoint(x: point.x, y: path.currentPoint?.y ?? point.y))
+                                path.addLine(to: point)
+                            } else {
+                                path.move(to: point)
+                                started = true
+                            }
+                        }
+                    }
+                    .stroke(Color.brand, style: StrokeStyle(lineWidth: 3, lineCap: .square, lineJoin: .miter))
+                }
+                .frame(height: 60)
+                .overlay(alignment: .bottom) { Rectangle().fill(Color.track).frame(height: 2) }
+                if let thisWeek {
+                    Text(summary(thisWeek)).font(.px(12))
+                }
+            } else {
+                Text("記錄幾天體重之後，這裡會畫出趨勢。").font(.px(12)).foregroundStyle(Color.soft)
+            }
+            Text("體重一天會因為水分、吃的東西上下差到 1 公斤，看平均的方向就好。")
+                .font(.px(12))
+                .foregroundStyle(Color.soft)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .task(id: refresh) { load() }
+    }
+
+    private func summary(_ current: Double) -> String {
+        let text = "這週平均 \(current.formatted(.number.precision(.fractionLength(1)))) kg"
+        guard let lastWeek else { return text }
+        let diff = current - lastWeek
+        if abs(diff) < 0.15 { return text + "，跟上週差不多" }
+        return text + "，比上週\(diff < 0 ? "少" : "多") \(abs(diff).formatted(.number.precision(.fractionLength(1)))) kg"
+    }
+
+    private func load() {
+        let today = Date.now.startOfDay
+        let start = today.adding(days: -34)
+        let weights = LogService.shared.dailyWeights(from: start, days: 35)
+        let days = (0..<35).map { start.adding(days: $0) }
+        func average(_ range: [Date]) -> Double? {
+            let values = range.compactMap { weights[$0] }
+            return values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+        }
+        // 最近 28 天，每天往前 7 天的平均
+        averages = (7..<35).map { index in average(Array(days[(index - 6)...index])) }
+        thisWeek = average(Array(days.suffix(7)))
+        lastWeek = average(Array(days.dropLast(7).suffix(7)))
     }
 }
 

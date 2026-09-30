@@ -164,6 +164,15 @@ struct CampView: View {
 struct CampScene: View {
     @ObservedObject private var camp = CampStore.shared
     @ObservedObject private var spirits = SpiritCollection.shared
+    /// 點到的精靈或建築說的話（顯示 3 秒多）
+    @State private var speech: Speech?
+
+    private struct Speech: Equatable {
+        enum Speaker: Equatable { case spirit(CompanionSkin), building(CampBuilding) }
+        let speaker: Speaker
+        let text: String
+        let until: Date
+    }
 
     /// 節慶裝飾的位置（建築之間的空地）
     private static let decorationSlots: [(Festival, CGPoint)] = [
@@ -197,6 +206,8 @@ struct CampScene: View {
                     grass(size: size)
                     ForEach(Self.slots, id: \.0) { building, point, length in
                         slot(building, length: length, tick: Int(time / 0.35))
+                            .contentShape(Rectangle())
+                            .onTapGesture { talk(.building(building)) }
                             .position(x: point.x * size.width, y: point.y * size.height)
                     }
                     ForEach(Self.decorationSlots.filter { camp.hasDecoration($0.0) }, id: \.0) { festival, point in
@@ -209,12 +220,74 @@ struct CampScene: View {
                                                   blink: Int(time * 2 + Double(index)) % 9 == 0), size: 28)
                             .scaleEffect(x: spot.facingLeft ? -1 : 1, y: 1)
                             .offset(y: Int(time / 0.35 + Double(index)) % 2 == 0 ? -1 : 0)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                            .onTapGesture { talk(.spirit(skin)) }
                             .position(spot.point)
+                            .accessibilityLabel("跟\(skin.title)說話")
+                            .accessibilityAddTraits(.isButton)
+                    }
+                    if let speech, speech.until > timeline.date, let point = speakerPoint(speech.speaker, time: time, size: size) {
+                        Text(speech.text)
+                            .font(.px(12))
+                            .foregroundStyle(Color.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 190)
+                            .padding(8)
+                            .background { PixelPanel(fill: .window, shadow: .pxShadow, lineWidth: 2) }
+                            .position(x: min(max(point.x, 104), size.width - 104), y: max(point.y - 48, 30))
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
                     }
                 }
             }
         }
+        #if DEBUG
+        // 開發用：-campTalk 打開時第一隻精靈先說話（截圖檢查對話框）
+        .task {
+            if ProcessInfo.processInfo.arguments.contains("-campTalk"), let first = wanderers.first {
+                try? await Task.sleep(for: .seconds(1))
+                talk(.spirit(first))
+                speech = speech.map { Speech(speaker: $0.speaker, text: $0.text, until: .now.addingTimeInterval(30)) }
+            }
+        }
+        #endif
     }
+
+    // MARK: 對話
+
+    private func talk(_ speaker: Speech.Speaker) {
+        let text: String
+        switch speaker {
+        case .spirit(let skin):
+            var lines = Self.chatter.map { "\(skin.title)：\($0)" }
+            // 羈絆 Lv3 以上會說出自己的故事
+            if camp.bondLevel(skin) >= 3, let story = skin.bondStories.first { lines.append(story) }
+            lines.removeAll { $0 == speech?.text }
+            text = lines.randomElement() ?? skin.title
+        case .building(let building):
+            let level = camp.level(building)
+            text = level > 0 ? "\(building.title(level: level))：\(building.detail)" : "這裡可以蓋\(building.title(level: 1))，到下面的「建造」看看。"
+        }
+        withAnimation(.easeOut(duration: 0.2)) { speech = Speech(speaker: speaker, text: text, until: .now.addingTimeInterval(3.5)) }
+    }
+
+    private func speakerPoint(_ speaker: Speech.Speaker, time: TimeInterval, size: CGSize) -> CGPoint? {
+        switch speaker {
+        case .spirit(let skin):
+            guard let index = wanderers.firstIndex(of: skin) else { return nil }
+            return position(of: index, time: time, size: size).point
+        case .building(let building):
+            guard let slot = Self.slots.first(where: { $0.0 == building }) else { return nil }
+            return CGPoint(x: slot.1.x * size.width, y: slot.1.y * size.height - slot.2 / 2 + 20)
+        }
+    }
+
+    private static let chatter = [
+        "今天也一起加油吧！", "營地住起來好舒服。", "你今天有喝水嗎？", "走一走，心情會變好喔。",
+        "我剛剛在菜園看到一隻蝴蝶！", "晚上記得早點睡。", "謝謝你每天都來看我們。", "營火的味道好香。",
+        "要不要出去散個步？", "今天的天空好藍。",
+    ]
 
     /// 出來散步的精靈：帶著的夥伴一定在，其他每天輪流（最多 wanderLimit 隻）
     private var wanderers: [CompanionSkin] {

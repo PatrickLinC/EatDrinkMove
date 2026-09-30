@@ -816,11 +816,12 @@ struct RemindersView: View {
     @AppStorage(SettingKey.workStart) private var workStart = AppSettings.Defaults.workStart
     @AppStorage(SettingKey.workEnd) private var workEnd = AppSettings.Defaults.workEnd
     @AppStorage(SettingKey.sedentaryWeekdaysOnly) private var weekdaysOnly = true
+    @AppStorage(SettingKey.windDownReminder) private var windDownReminder = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     /// 任一項改變就重新排程
     private var signature: String {
-        [mealReminders, waterReminders, eveningReview, sedentaryReminders, weekdaysOnly].map { $0 ? "1" : "0" }.joined()
+        [mealReminders, waterReminders, eveningReview, sedentaryReminders, weekdaysOnly, windDownReminder].map { $0 ? "1" : "0" }.joined()
             + "\(breakfastTime)-\(lunchTime)-\(dinnerTime)-\(waterInterval)-\(wakeTime)-\(sleepTime)-\(eveningTime)"
             + "-\(workStart)-\(workEnd)"
     }
@@ -879,6 +880,15 @@ struct RemindersView: View {
                     }
                 } footer: {
                     pxHeader("睡前升起營火：收下今天的元氣幣、設定明天的小目標，也提醒還漏了哪一餐、還差多少水。")
+                }
+
+                Section {
+                    Toggle("睡前放鬆", isOn: $windDownReminder)
+                    if windDownReminder {
+                        DatePicker("睡覺時間", selection: $sleepTime.timeOfDay, displayedComponents: .hourAndMinute)
+                    }
+                } footer: {
+                    pxHeader("在睡覺時間前 30 分鐘提醒放下手機、調暗燈光。")
                 }
 
                 Section {

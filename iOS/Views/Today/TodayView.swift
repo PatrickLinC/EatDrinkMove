@@ -165,6 +165,8 @@ struct DayContent: View {
                 if let festival = Festival.active() { FestivalWindow(festival: festival).id("festival") }
                 HabitWindow(refreshKey: foods.count + waters.count + exercises.count)
                     .id("habits")
+                PlateWindow(foods: foods)
+                    .id("plate")
                 CommandWindow(cupSize: cupSize)
                 QuestWindow(nudges: NudgeEngine.nudges(foods: foods, waterTotal: waterTotal,
                                                        waterGoal: waterGoal, skippedMeals: skippedMeals))

@@ -53,6 +53,7 @@ enum SettingKey {
     static let workStart = "workStart"
     static let workEnd = "workEnd"
     static let sedentaryWeekdaysOnly = "sedentaryWeekdaysOnly"
+    static let windDownReminder = "windDownReminder"
 
     // AI
     static let aiProvider = "aiProvider"
@@ -170,6 +171,7 @@ enum AppSettings {
             SettingKey.workStart: Defaults.workStart,
             SettingKey.workEnd: Defaults.workEnd,
             SettingKey.sedentaryWeekdaysOnly: true,
+            SettingKey.windDownReminder: false,
         ])
     }
 
@@ -189,6 +191,7 @@ enum AppSettings {
     static var workStart: Int { d.integer(forKey: SettingKey.workStart) }
     static var workEnd: Int { d.integer(forKey: SettingKey.workEnd) }
     static var sedentaryWeekdaysOnly: Bool { d.bool(forKey: SettingKey.sedentaryWeekdaysOnly) }
+    static var windDownReminder: Bool { d.bool(forKey: SettingKey.windDownReminder) }
 
     /// 依「每週的第一天」設定的日曆（週一或週日開始）
     static var calendar: Calendar {

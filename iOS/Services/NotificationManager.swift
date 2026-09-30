@@ -25,7 +25,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// 由排程管理的通知前綴；「稍後提醒」用 snooze- 開頭，不會被重新排程清掉
-    private let managedPrefixes = ["meal-", "water-", "review-", "comeback-", "stand-"]
+    private let managedPrefixes = ["meal-", "water-", "review-", "comeback-", "stand-", "winddown-"]
     private let center = UNUserNotificationCenter.current()
     private var refreshTask: Task<Void, Never>?
 
@@ -135,6 +135,12 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                 }
             }
 
+            // 睡前放鬆：睡覺時間前 30 分鐘
+            if AppSettings.windDownReminder {
+                let fire = Date.at(minutes: AppSettings.sleepTime - 30, on: day)
+                if fire > now { requests.append(windDownRequest(at: fire)) }
+            }
+
             if AppSettings.eveningReview {
                 let fire = Date.at(minutes: AppSettings.eveningTime, on: day)
                 if fire > now {
@@ -192,6 +198,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         }
         return request(id: "review-\(date.dayKey)", title: "營火時間 🔥",
                        body: body, category: Category.review, at: date)
+    }
+
+    private func windDownRequest(at date: Date) -> UNNotificationRequest {
+        let name = UserDefaults.standard.string(forKey: SettingKey.companionName) ?? "小卡"
+        return request(id: "winddown-\(date.dayKey)", title: "熬夜蝠快來了 🦇",
+                       body: "\(name)：再 30 分鐘就是睡覺時間，放下手機、把燈調暗，今晚的夢境能量會比較多喔。",
+                       category: Category.review, at: date)
     }
 
     private func standRequest(at date: Date) -> UNNotificationRequest {

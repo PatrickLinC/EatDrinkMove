@@ -1876,3 +1876,25 @@ extension PixelArt {
         "kkkkkkkkkkkkkkkk",
     ])
 }
+
+extension PixelArt {
+    /// 我的餐盤：堅果
+    static let plateNut = PixelArt([
+        "................",
+        "................",
+        "......kkkk......",
+        ".....kbbbbk.....",
+        "....kbbhbbbk....",
+        "...kbbhbbbbbk...",
+        "...kbbbbbbbbk...",
+        "...kbbbsbbbbk...",
+        "...kbbbbbsbbk...",
+        "...kbbbbbbbbk...",
+        "....kbbbsbbk....",
+        "....kbbbbbbk....",
+        ".....kbbbbk.....",
+        "......kkkk......",
+        "................",
+        "................",
+    ])
+}
