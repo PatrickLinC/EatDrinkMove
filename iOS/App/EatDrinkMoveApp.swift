@@ -234,6 +234,19 @@ struct RootView: View {
         debugStress = arguments.contains("-stressDetail")
         debugBoss = arguments.contains("-boss")
         recorder.seedForScreenshots()
+        // -seedWeights：放 30 天的體重（檢查體重趨勢，只在模擬器用；已經有就不再放）
+        if arguments.contains("-seedWeights") {
+            let context = AppDatabase.context
+            let existing = (try? context.fetchCount(FetchDescriptor<WeightEntry>())) ?? 0
+            if existing == 0 {
+                let wobble = [0.3, -0.2, 0.5, 0.1, -0.4, 0.2, 0.6]
+                for offset in 0..<30 {
+                    let kg = 69.6 - Double(30 - offset) * -0.04 - Double(offset) * 0.07 + wobble[offset % wobble.count]
+                    context.insert(WeightEntry(kg: (kg * 10).rounded() / 10, date: Date.now.startOfDay.adding(days: offset - 29).addingTimeInterval(7 * 3600)))
+                }
+                try? context.save()
+            }
+        }
         // -backupRoundTrip：匯出備份再放進還原暫存區，重開 App 時檢查還原是否正常
         if arguments.contains("-backupRoundTrip") {
             Task {

@@ -164,7 +164,7 @@ struct CampView: View {
 struct CampScene: View {
     @ObservedObject private var camp = CampStore.shared
     @ObservedObject private var spirits = SpiritCollection.shared
-    /// 點到的精靈或建築說的話（顯示 3 秒多）
+    /// 點到的精靈或建築說的話（顯示 5 秒）
     @State private var speech: Speech?
 
     private struct Speech: Equatable {
@@ -269,7 +269,7 @@ struct CampScene: View {
             let level = camp.level(building)
             text = level > 0 ? "\(building.title(level: level))：\(building.detail)" : "這裡可以蓋\(building.title(level: 1))，到下面的「建造」看看。"
         }
-        withAnimation(.easeOut(duration: 0.2)) { speech = Speech(speaker: speaker, text: text, until: .now.addingTimeInterval(3.5)) }
+        withAnimation(.easeOut(duration: 0.2)) { speech = Speech(speaker: speaker, text: text, until: .now.addingTimeInterval(5)) }
     }
 
     private func speakerPoint(_ speaker: Speech.Speaker, time: TimeInterval, size: CGSize) -> CGPoint? {
