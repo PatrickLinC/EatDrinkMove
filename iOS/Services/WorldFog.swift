@@ -143,11 +143,11 @@ final class WorldFogStore: NSObject, ObservableObject {
 
     fileprivate func receive(_ location: CLLocation) {
         let accuracy = location.horizontalAccuracy
-        // 太粗略的定位（200 公尺以上）不解除，免得沒去過的地方也開了一大圈
-        guard accuracy >= 0, accuracy <= 200 else { return }
-        let radius = accuracy <= 50 ? 60 : max(accuracy, 80)
+        guard accuracy >= 0, accuracy <= 1500 else { return }
+        // 迷霧可以模糊：定位越準，解除的範圍越貼近實際；基地台定位就解除周圍一大圈
+        let radius = accuracy <= 50 ? 60 : min(max(accuracy, 120), 400)
         clear(around: location.coordinate, radius: radius, day: location.timestamp)
-        // 夠準的點也記進足跡日記，畫成那天的路線
+        // 足跡日記的路線只用夠準的點（100 公尺內）畫，不會畫出大圈
         FootprintDiary.shared.addTrack(location)
     }
 
@@ -334,7 +334,7 @@ extension WorldFogStore: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
-        guard visit.horizontalAccuracy >= 0, visit.horizontalAccuracy <= 200 else { return }
+        guard visit.horizontalAccuracy >= 0, visit.horizontalAccuracy <= 500 else { return }
         let coordinate = visit.coordinate
         let day = visit.arrivalDate == .distantPast ? Date.now : visit.arrivalDate
         Task { @MainActor in self.clear(around: coordinate, radius: 150, day: day) }
