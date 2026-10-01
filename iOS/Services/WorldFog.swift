@@ -143,10 +143,12 @@ final class WorldFogStore: NSObject, ObservableObject {
 
     fileprivate func receive(_ location: CLLocation) {
         let accuracy = location.horizontalAccuracy
-        guard accuracy >= 0, accuracy <= 1500 else { return }
-        // 定位越準，解除的範圍越貼近實際；基地台定位就解除周圍一大圈
-        let radius = accuracy <= 50 ? 60 : min(max(accuracy, 120), 400)
+        // 太粗略的定位（200 公尺以上）不解除，免得沒去過的地方也開了一大圈
+        guard accuracy >= 0, accuracy <= 200 else { return }
+        let radius = accuracy <= 50 ? 60 : max(accuracy, 80)
         clear(around: location.coordinate, radius: radius, day: location.timestamp)
+        // 夠準的點也記進足跡日記，畫成那天的路線
+        FootprintDiary.shared.addTrack(location)
     }
 
     // MARK: 解除
@@ -315,6 +317,13 @@ final class WorldFogStore: NSObject, ObservableObject {
         clear(around: CLLocationCoordinate2D(latitude: 25.0263, longitude: 121.5436), radius: 250, save: false, day: .now)
         clear(along: (0...40).map { CLLocationCoordinate2D(latitude: 25.0478 - Double($0) * 0.0005, longitude: 121.5170 + Double($0) * 0.0012) },
               save: false, day: yesterday)
+        // 昨天平常走動的軌跡（畫成綠色的線）
+        for index in 0...60 {
+            let t = Double(index)
+            let coordinate = CLLocationCoordinate2D(latitude: 25.0478 - t * 0.0003 + sin(t / 6) * 0.0006, longitude: 121.5170 + t * 0.0007)
+            FootprintDiary.shared.addTrack(CLLocation(coordinate: coordinate, altitude: 10, horizontalAccuracy: 10, verticalAccuracy: 10,
+                                                      timestamp: yesterday.startOfDay.addingTimeInterval(9 * 3600 + t * 40)))
+        }
     }
     #endif
 }
@@ -325,7 +334,7 @@ extension WorldFogStore: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didVisit visit: CLVisit) {
-        guard visit.horizontalAccuracy >= 0, visit.horizontalAccuracy <= 500 else { return }
+        guard visit.horizontalAccuracy >= 0, visit.horizontalAccuracy <= 200 else { return }
         let coordinate = visit.coordinate
         let day = visit.arrivalDate == .distantPast ? Date.now : visit.arrivalDate
         Task { @MainActor in self.clear(around: coordinate, radius: 150, day: day) }

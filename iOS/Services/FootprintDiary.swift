@@ -14,6 +14,18 @@ final class FootprintDiary: ObservableObject {
         var visited: Set<Int64> = []
         /// 這天第一次解除的格子數
         var newCells = 0
+        /// 這天走過的位置（緯度、經度、時間），畫成路線
+        var track: [[Double]] = []
+
+        init() {}
+
+        // 新欄位用 decodeIfPresent，舊的日記不會讀不出來
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            visited = try container.decodeIfPresent(Set<Int64>.self, forKey: .visited) ?? []
+            newCells = try container.decodeIfPresent(Int.self, forKey: .newCells) ?? 0
+            track = try container.decodeIfPresent([[Double]].self, forKey: .track) ?? []
+        }
     }
 
     /// dayKey → 那天的足跡
@@ -52,6 +64,21 @@ final class FootprintDiary: ObservableObject {
         var day = days[key] ?? Day()
         day.visited.formUnion(visited)
         day.newCells += newCells
+        days[key] = day
+        scheduleSave()
+    }
+
+    /// 記一個位置點：要夠準（100 公尺內），離上一點 20 公尺以上才記
+    func addTrack(_ location: CLLocation) {
+        let accuracy = location.horizontalAccuracy
+        guard accuracy >= 0, accuracy <= 100 else { return }
+        let key = location.timestamp.dayKey
+        var day = days[key] ?? Day()
+        if let last = day.track.last, last.count >= 2,
+           CLLocation(latitude: last[0], longitude: last[1]).distance(from: location) < 20 { return }
+        guard day.track.count < 5000 else { return }
+        let coordinate = location.coordinate
+        day.track.append([coordinate.latitude, coordinate.longitude, location.timestamp.timeIntervalSince1970])
         days[key] = day
         scheduleSave()
     }
@@ -99,11 +126,14 @@ struct FootprintDaySummary {
     let visited: Set<Int64>
     let newCells: Int
     let routes: [SavedRoute]
+    /// 平常走動的位置軌跡（已經切成一段一段：中間斷超過 30 分鐘或 1.5 公里就分開）
+    var track: [[CLLocationCoordinate2D]] = []
     var steps: Double = 0
     var meters: Double = 0
 
     var area: Double { Double(visited.count) * FogCell.area }
-    var isEmpty: Bool { visited.isEmpty && routes.isEmpty && steps == 0 }
+    var isEmpty: Bool { visited.isEmpty && routes.isEmpty && track.isEmpty && steps == 0 }
+    var hasLines: Bool { !routes.isEmpty || !track.isEmpty }
 
     @MainActor
     static func load(_ date: Date) async -> FootprintDaySummary {
@@ -111,23 +141,48 @@ struct FootprintDaySummary {
         let record = FootprintDiary.shared.day(day)
         var summary = FootprintDaySummary(date: day, visited: record?.visited ?? [], newCells: record?.newCells ?? 0,
                                           routes: RouteStore.shared.routes(on: day))
+        summary.track = Self.segments(record?.track ?? [])
         let health = HealthKitManager.shared
         summary.steps = await health.sum(.stepCount, unit: .count(), from: day, to: day.adding(days: 1))
         summary.meters = await health.sum(.distanceWalkingRunning, unit: .meter(), from: day, to: day.adding(days: 1))
         return summary
     }
 
-    /// 地圖要框住的範圍（格子加路線）
+    /// 把位置點切成一段一段的線
+    static func segments(_ points: [[Double]]) -> [[CLLocationCoordinate2D]] {
+        var result: [[CLLocationCoordinate2D]] = []
+        var current: [CLLocationCoordinate2D] = []
+        var last: (location: CLLocation, time: Double)?
+        for point in points.sorted(by: { ($0.count > 2 ? $0[2] : 0) < ($1.count > 2 ? $1[2] : 0) }) where point.count >= 3 {
+            let location = CLLocation(latitude: point[0], longitude: point[1])
+            if let last, point[2] - last.time > 30 * 60 || location.distance(from: last.location) > 1500 {
+                if current.count > 1 { result.append(current) }
+                current = []
+            }
+            current.append(location.coordinate)
+            last = (location, point[2])
+        }
+        if current.count > 1 { result.append(current) }
+        return result
+    }
+
+    /// 地圖要框住的範圍：有路線就框路線，沒有才框格子
     var region: (center: CLLocationCoordinate2D, latDelta: Double, lonDelta: Double)? {
         var lats: [Double] = [], lons: [Double] = []
-        for id in visited {
-            let (south, north) = FogCell.bounds(id, factor: 1)
-            lats += [south.latitude, north.latitude]
-            lons += [south.longitude, north.longitude]
-        }
         for route in routes {
             lats += route.coordinates.map(\.latitude)
             lons += route.coordinates.map(\.longitude)
+        }
+        for line in track {
+            lats += line.map(\.latitude)
+            lons += line.map(\.longitude)
+        }
+        if lats.isEmpty {
+            for id in visited {
+                let (south, north) = FogCell.bounds(id, factor: 1)
+                lats += [south.latitude, north.latitude]
+                lons += [south.longitude, north.longitude]
+            }
         }
         guard let minLat = lats.min(), let maxLat = lats.max(), let minLon = lons.min(), let maxLon = lons.max() else { return nil }
         return (CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2),

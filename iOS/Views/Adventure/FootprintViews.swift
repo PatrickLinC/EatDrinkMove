@@ -85,7 +85,7 @@ struct FootprintView: View {
     /// 今天的足跡：走過的格子、路線、步數，下面可以打開足跡月曆看以前
     private var todayWindow: some View {
         PixelWindow(title: "今日足跡", tint: .brand) {
-            if let today, !today.visited.isEmpty || !today.routes.isEmpty {
+            if let today, today.hasLines {
                 DayFootprintMap(summary: today)
                     .frame(height: 220)
                     .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
@@ -94,7 +94,7 @@ struct FootprintView: View {
                     .frame(height: 220)
                     .clipShape(Rectangle())
                     .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
-                Text("今天還沒有足跡。出門走走，或按下面的「散步」開始冒險吧！")
+                Text("今天還沒有畫出路線。打開最下面「世界迷霧」的自動解除，平常走路就會畫線；或按下面的「散步」出發冒險。")
                     .font(.px(12))
                     .foregroundStyle(Color.soft)
             }

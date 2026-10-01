@@ -97,11 +97,19 @@ enum PixelTheme {
     /// iPhone 依目前配色與深淺色模式即時取色；手錶固定用奶茶深色
     static func color(_ key: KeyPath<PixelShades, UInt32>) -> Color {
         #if os(iOS)
-        Color(uiColor: uiColor(key))
+        // 同一種顏色重複用同一個物件：每次都新建的話，SwiftUI 會把「主色換成白色」當成沒變，按鈕選取狀態不會重畫
+        if let cached = cache[key] { return cached }
+        let color = Color(uiColor: uiColor(key))
+        cache[key] = color
+        return color
         #else
         Color(hex: PixelPalette.milkTea.dark[keyPath: key])
         #endif
     }
+
+    #if os(iOS)
+    private static var cache: [KeyPath<PixelShades, UInt32>: Color] = [:]
+    #endif
 
     #if os(iOS)
     static func uiColor(_ key: KeyPath<PixelShades, UInt32>) -> UIColor {

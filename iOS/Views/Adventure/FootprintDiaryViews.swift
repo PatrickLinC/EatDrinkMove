@@ -3,58 +3,48 @@ import SwiftUI
 
 // MARK: - 某一天的足跡地圖
 
-/// 那天走過的每一格都蓋上像素腳印，再疊上路線和照片
+/// 那天走過的路線：平常走動的軌跡（綠色）、出發冒險的路線（咖啡色），再加上照片
 struct DayFootprintMap: View {
     let summary: FootprintDaySummary
     var photos: [RoutePhoto] = []
     @State private var position: MapCameraPosition = .userLocation(fallback: .automatic)
-    @State private var region: MKCoordinateRegion?
 
     var body: some View {
-        MapReader { proxy in
-            Map(position: $position) {
-                ForEach(summary.routes) { route in
-                    MapPolyline(coordinates: route.coordinates)
-                        .stroke(Color.brand, style: StrokeStyle(lineWidth: 4, lineCap: .square, lineJoin: .miter))
-                }
-                ForEach(photos.filter { $0.coordinate != nil }) { photo in
-                    Annotation("", coordinate: photo.coordinate!) {
-                        Image(uiImage: photo.thumbnail)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 30, height: 30)
-                            .clipped()
-                            .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
-                    }
-                }
+        Map(position: $position) {
+            ForEach(Array(summary.track.enumerated()), id: \.offset) { _, line in
+                MapPolyline(coordinates: line)
+                    .stroke(Color.move, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
             }
-            .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-            .mapControls { MapCompass() }
-            .onMapCameraChange(frequency: .continuous) { context in region = context.region }
-            .overlay {
-                Canvas { context, _ in
-                    guard region != nil else { return }
-                    for id in summary.visited {
-                        let (south, north) = FogCell.bounds(id, factor: 1)
-                        guard let a = proxy.convert(south, to: .local), let b = proxy.convert(north, to: .local) else { continue }
-                        let rect = CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
-                        guard rect.width >= 1 else { continue }
-                        context.fill(Path(rect), with: .color(Color.move.opacity(0.35)))
-                        // 格子夠大時畫一個像素腳印
-                        if rect.width >= 10 {
-                            let unit = rect.width / 6
-                            for (x, y) in [(1.0, 1.0), (1.0, 2.0), (3.5, 3.0), (3.5, 4.0)] {
-                                context.fill(Path(CGRect(x: rect.minX + unit * x, y: rect.minY + unit * y, width: unit, height: unit)),
-                                             with: .color(Color.move))
-                            }
-                        }
-                    }
+            ForEach(summary.routes) { route in
+                MapPolyline(coordinates: route.coordinates)
+                    .stroke(Color.brand, style: StrokeStyle(lineWidth: 5, lineCap: .square, lineJoin: .miter))
+            }
+            if let start = summary.track.first?.first ?? summary.routes.first?.coordinates.first {
+                Annotation("", coordinate: start) { marker(Color.move) }
+            }
+            if let end = summary.track.last?.last ?? summary.routes.last?.coordinates.last {
+                Annotation("", coordinate: end) { marker(Color.protein) }
+            }
+            ForEach(photos.filter { $0.coordinate != nil }) { photo in
+                Annotation("", coordinate: photo.coordinate!) {
+                    Image(uiImage: photo.thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 30, height: 30)
+                        .clipped()
+                        .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
                 }
-                .allowsHitTesting(false)
             }
         }
+        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        .mapControls { MapCompass() }
         .onAppear { fit() }
         .onChange(of: summary.date) { fit() }
+    }
+
+    /// 起點、終點的小方塊
+    private func marker(_ color: Color) -> some View {
+        Rectangle().fill(color).frame(width: 12, height: 12).overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
     }
 
     private func fit() {
@@ -104,7 +94,7 @@ struct FootprintRecapWindow: View {
                         CompanionAvatar(size: 36)
                         Text(Self.line(summary)).fixedSize(horizontal: false, vertical: true)
                     }
-                    if !summary.visited.isEmpty || !summary.routes.isEmpty {
+                    if summary.hasLines {
                         DayFootprintMap(summary: summary)
                             .frame(height: 180)
                             .overlay(Rectangle().strokeBorder(Color.ink, lineWidth: 2))
@@ -281,8 +271,8 @@ struct FootprintDaySheet: View {
                             .accessibilityLabel("後一天")
                     }
                     if let summary {
-                        if summary.visited.isEmpty && summary.routes.isEmpty {
-                            Text("這天沒有位置紀錄。打開足跡頁最下面「世界迷霧」的自動解除後，每天走過的地方都會記下來。")
+                        if !summary.hasLines {
+                            Text("這天沒有畫出路線。打開足跡頁最下面「世界迷霧」的自動解除後，平常走路的路線也會記下來。")
                                 .font(.px(12))
                                 .foregroundStyle(Color.soft)
                                 .fixedSize(horizontal: false, vertical: true)
